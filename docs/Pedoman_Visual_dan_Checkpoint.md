@@ -37,6 +37,7 @@ CityRT dan gambar referensi pengguna menjadi **acuan rasa visual**: dunia sepert
 | --- | --- |
 | Platform | Halaman web statis dengan HTML, CSS, dan JavaScript. |
 | Peta | Wilayah logis 125 × 125 tile, total 15.625 tile; ukuran setiap tile tetap sama seperti versi 50 × 50. Warna terrain menggunakan transisi halus agar petak tidak tampak jelas. |
+| Skala dunia | 1 tile = 10 × 10 meter = 100 m²; peta 125 × 125 tile = 1.250 × 1.250 meter = 1,5625 km² = 156,25 hektare. Skala ini adalah keputusan desain; ukuran visual aset dan mekanik belum dikalibrasi secara menyeluruh. |
 | Renderer | Geometri 3D dirender dengan WebGL bila tersedia; ada renderer cadangan berbasis Canvas 2D yang memproyeksikan geometri 3D bila WebGL tidak tersedia. |
 | Terrain | Kontur, warna rumput, alur sungai dan tepian dihasilkan secara prosedural. |
 | Vegetasi | Pohon berkanopi dan palem dibentuk dari geometri prosedural; lokasi bervariasi berdasarkan seed. |
@@ -96,3 +97,13 @@ Kode prototipe saat ini menggunakan `game.js` dan `map.js`. Saat kompleksitas be
 - Kode checkpoint ini tersimpan bersama dokumen di commit GitHub yang memuat bagian ini. Commit sumber prototipe terpisah: `0c1871cc492c88738a9482e84f5760a1fc543a2c`.
 - Validasi sebelumnya: 150 seed diuji untuk keterhubungan air, termasuk danau terpisah; jumlah kategori diperiksa pada 100 seed. Sintaks JavaScript diperiksa. Versi ini belum diperiksa langsung di browser oleh asisten, dan performa perangkat pengguna belum diukur; pengguna menyukai tampilannya.
 - Tidak ada sistem bangunan, jalan atau ekonomi pada checkpoint ini.
+
+## 8. Checkpoint — Skala dunia 10 × 10 meter per tile
+
+**Tanggal:** 23 November 2026  
+**Status:** Disetujui pengguna sebagai acuan skala.
+
+- **1 tile = 10 × 10 meter**, dengan luas 100 m².
+- Peta **125 × 125 tile** merepresentasikan area **1.250 × 1.250 meter** atau **1,5625 km² (156,25 hektare)**.
+- Gunakan skala ini sebagai acuan untuk perencanaan ukuran bangunan, jalan, jarak dan lahan pada tahap berikutnya. Ukuran spesifik dan mekanik tiap aset menunggu arahan pengguna.
+- Keputusan ini merupakan ketentuan desain; tidak ada perubahan kode, ukuran visual aset atau kalibrasi pengukuran pada checkpoint ini.
