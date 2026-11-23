@@ -107,3 +107,15 @@ Kode prototipe saat ini menggunakan `game.js` dan `map.js`. Saat kompleksitas be
 - Peta **125 × 125 tile** merepresentasikan area **1.250 × 1.250 meter** atau **1,5625 km² (156,25 hektare)**.
 - Gunakan skala ini sebagai acuan untuk perencanaan ukuran bangunan, jalan, jarak dan lahan pada tahap berikutnya. Ukuran spesifik dan mekanik tiap aset menunggu arahan pengguna.
 - Keputusan ini merupakan ketentuan desain; tidak ada perubahan kode, ukuran visual aset atau kalibrasi pengukuran pada checkpoint ini.
+
+
+## 9. Checkpoint — Kalibrasi ukuran aset sementara
+
+**Tanggal:** 23 November 2026  
+**Status:** Acuan awal untuk diperiksa dan disesuaikan, bukan ukuran final aset.
+
+- Skala dunia tetap **1 tile = 10 × 10 meter**. Satu tile adalah area lahan, bukan ukuran satu pohon; jumlah dan ukuran pohon dalam sebuah tile dapat bervariasi.
+- Ukuran pohon pada prototipe dibentuk berdasarkan tampilan visual sebelum skala meter diputuskan. Proporsinya terhadap tile, manusia dan bangunan belum dikalibrasi.
+- Acuan awal untuk evaluasi: manusia dewasa sekitar 1,7 m; rumah sederhana lebar sekitar 5–10 m; pohon kecil–sedang tinggi sekitar 5–12 m; pohon besar sekitar 15–25 m atau lebih. Rentang ini adalah ilustrasi, belum menjadi spesifikasi final atau ketentuan gameplay.
+- Buat atau gunakan figur manusia dan model rumah sebagai pembanding saat aset tersebut dikerjakan. Pertimbangkan variasi ukuran pohon, termasuk mempertahankan beberapa pohon besar. Proporsi visual boleh sedikit distilisasi agar terbaca dari kamera atas.
+- Ukuran akhir aset, jumlah pohon per tile dan perubahan visual akan diputuskan setelah evaluasi dan arahan pengguna. Checkpoint ini hanya mencatat rencana; tidak ada perubahan kode atau aset.
