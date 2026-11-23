@@ -1,7 +1,7 @@
 # Game AHS — Pedoman Visual dan Fondasi Kode
 
 **Proyek:** County builder 3D berlatar Majapahit, dapat dimainkan di browser  
-**Status:** Acuan pengembangan yang disepakati, checkpoint terrain 125 × 125 yang disetujui  
+**Status:** Acuan pengembangan yang disepakati, checkpoint generator peta, perbukitan tinggi, dan sungai bercabang  
 **Tanggal:** 23 November 2026  
 **Demo:** [Tanah Majapahit](https://majapahit-terrain-ahs.vast-vine-9923.chatgpt.site)
 
@@ -19,7 +19,7 @@ CityRT dan gambar referensi pengguna menjadi **acuan rasa visual**: dunia sepert
 
 - Geometri 3D stylized low-to-mid poly, rapi, dengan bentuk yang mudah dikenali. Gunakan warna dan shading sederhana; hindari tampilan fotorealistis yang berat.
 - Permukaan rumput dan air halus, warna berpadu dan transisinya lembut. Hindari tampilan kotak-kotak atau batas petak yang terlihat jelas dalam tampilan normal.
-- Kontur alami ringan; sediakan area datar terbuka yang mudah dibaca dan dapat dipakai untuk pembangunan pada tahap berikutnya.
+- Kontur alami dengan perbukitan 3D tinggi berkelompok, lereng hijau dan sedikit batu pada area curam; sediakan area datar terbuka untuk pembangunan.
 - Sungai mengikuti bentuk alami; tepian berbaur dengan tanah. Air menggunakan biru kehijauan yang lembut.
 - Nuansa alam tropis Jawa: pepohonan hijau berkelompok, kanopi lebar, beberapa palem, dan variasi ukuran serta kepadatan hutan. Jangan memenuhi seluruh peta dengan rumput atau foliage 3D kecil.
 - Cahaya dan warna mengarah ke suasana hangat dan nyaman, dengan kedalaman visual yang jelas. Shading dan pencahayaan dapat disempurnakan bertahap sesuai kemampuan implementasi.
@@ -42,7 +42,7 @@ CityRT dan gambar referensi pengguna menjadi **acuan rasa visual**: dunia sepert
 | Vegetasi | Pohon berkanopi dan palem dibentuk dari geometri prosedural; lokasi bervariasi berdasarkan seed. |
 | Kamera | Putar dengan drag, zoom dengan scroll, geser dengan Shift + drag, dan reset dengan tombol. |
 | Tile | Klik menampilkan perkiraan lokasi tile dan klasifikasi darat/sungai; pemilihan saat ini memakai pendekatan bidang datar sehingga belum presisi untuk kontur atau objek yang lebih kompleks. |
-| Variasi dunia | Tombol membuat seed baru dan mengubah distribusi vegetasi; jangan menganggap seluruh bentuk terrain atau alur sungai berubah. |
+| Variasi dunia | Tombol menghasilkan peta berdasarkan seed, termasuk bentuk air, bukit, hutan dan vegetasi; input seed memungkinkan membuka peta yang sama pada versi generator yang sama. |
 
 **Batas saat ini:** Ini prototipe visual, belum mencakup bangunan, ekonomi, penduduk, jalan, penyimpanan permainan, atau sistem konstruksi. Renderer cadangan dapat lebih lambat, terutama saat geometri bertambah. Tidak ada klaim performa atau kompatibilitas pada semua perangkat tanpa pengujian.
 
@@ -53,12 +53,13 @@ CityRT dan gambar referensi pengguna menjadi **acuan rasa visual**: dunia sepert
 - `dist/index.html` — struktur halaman, kanvas dan kontrol.
 - `dist/style.css` — tampilan antarmuka dan penyesuaian ukuran layar.
 - `dist/game.js` — pembuatan geometri terrain dan pepohonan, pewarnaan, renderer, kamera dan interaksi prototipe.
+- `dist/map.js` — generator peta berbasis seed, tipe terrain dan bentuk bentang alam.
 - `ART_DIRECTION.md` — catatan singkat arahan seni di dalam proyek.
 - Konfigurasi hosting milik proyek prototipe terpisah dan tidak disalin ke repository ini.
 
-Kode prototipe saat ini disusun dalam satu file JavaScript. Saat kompleksitas bertambah, pisahkan generator terrain, aset, renderer, kamera, interaksi dan state secara bertahap tanpa mengubah arah visual atau mekanik yang disetujui. Simpan grid logis terpisah dari tampilan permukaan sehingga tile tidak harus terlihat sebagai kotak.
+Kode prototipe saat ini menggunakan `game.js` dan `map.js`. Saat kompleksitas bertambah, pisahkan generator terrain, aset, renderer, kamera, interaksi dan state secara bertahap tanpa mengubah arah visual atau mekanik yang disetujui. Simpan grid logis terpisah dari tampilan permukaan sehingga tile tidak harus terlihat sebagai kotak.
 
-**Titik acuan kode saat ini:** commit `98a6281f4d2d1a00be478102dab1fb8478dbfedb`, versi peta 125 × 125 yang disetujui pengguna. Titik acuan sebelumnya: `1b121b7a14ab1c8153e2007ed6a79fdfa3a1c9b7` untuk style tropis awal. Commit tersebut adalah identitas versi di repository asal. Kode checkpoint juga tersedia di repository GitHub ini.
+**Titik acuan sumber prototipe saat ini:** commit `0c1871cc492c88738a9482e84f5760a1fc543a2c`, generator peta dengan perbukitan tinggi. Versi peta 125 × 125 sebelumnya: `98a6281f4d2d1a00be478102dab1fb8478dbfedb`. Titik acuan sebelumnya: `1b121b7a14ab1c8153e2007ed6a79fdfa3a1c9b7` untuk style tropis awal. Commit tersebut adalah identitas versi di repository asal. Kode checkpoint juga tersedia di repository GitHub ini.
 
 ## 5. Aturan ketika melanjutkan pengembangan
 
@@ -83,3 +84,15 @@ Kode prototipe saat ini disusun dalam satu file JavaScript. Saat kompleksitas be
 - Ini adalah checkpoint visual terrain; pembangunan, jalan, ekonomi dan sistem gameplay lain belum diimplementasikan.
 
 **Prosedur checkpoint:** Setiap kali pengguna secara eksplisit meminta checkpoint, perbarui dokumen ini pada file yang sama. Catat tanggal, persetujuan, perubahan, versi kode, pengujian dan batasan aktual.
+
+## 7. Checkpoint — Generator peta dan perbukitan tinggi
+
+**Tanggal:** 23 November 2026  
+**Status:** Pengguna menyukai versi ini dan meminta checkpoint di GitHub.
+
+- Peta 125 × 125 memiliki kategori logis terpisah: 781 tile air, 5.469 hutan, 781 bukit, dan 8.594 padang rumput; persentasenya mendekati 5%, 35%, 5%, dan 55%. Lereng dapat meluas secara visual ke kategori di sekitarnya.
+- Generator berbasis seed membuat bentuk sungai, danau, kombinasi terhubung atau terpisah, dengan cabang sungai pada peta yang memiliki sungai. Hutan tersebar dan ada kelompok bukit 3D yang lebih tinggi dengan lereng sebagian berbatu.
+- Seed dapat dimasukkan kembali melalui panel. Versi generator yang berubah dapat menghasilkan peta berbeda untuk seed yang dipakai pada versi sebelumnya.
+- Kode checkpoint ini tersimpan bersama dokumen di commit GitHub yang memuat bagian ini. Commit sumber prototipe terpisah: `0c1871cc492c88738a9482e84f5760a1fc543a2c`.
+- Validasi sebelumnya: 150 seed diuji untuk keterhubungan air, termasuk danau terpisah; jumlah kategori diperiksa pada 100 seed. Sintaks JavaScript diperiksa. Versi ini belum diperiksa langsung di browser oleh asisten, dan performa perangkat pengguna belum diukur; pengguna menyukai tampilannya.
+- Tidak ada sistem bangunan, jalan atau ekonomi pada checkpoint ini.
