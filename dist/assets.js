@@ -13,7 +13,7 @@ const items=[
  {kind:'wood',label:'Rumah kayu · 2×2',x:-11,z:14,w:2,d:2},
  {kind:'wood',label:'Rumah kayu · 4×4',x:-3,z:14,w:4,d:4}
 ];
-function build(tri,quad){
+function build(tri,quad, selected=items){
 const wood=[.39,.25,.14],woodLight=[.59,.40,.22],beam=[.27,.17,.10],wall=[.67,.49,.29],brick=[.60,.27,.18],brickLight=[.74,.36,.23],ground=[.66,.59,.41],straw=[.74,.61,.36],rice=[.61,.76,.24],water=[.43,.68,.66],green=[.29,.53,.20];
 function box(x,y,z,w,h,d,c){let a=x-w/2,b=x+w/2,f=z-d/2,g=z+d/2;quad([a,y,f],[b,y,f],[b,y+h,f],[a,y+h,f],c);quad([b,y,g],[a,y,g],[a,y+h,g],[b,y+h,g],c);quad([a,y,g],[a,y,f],[a,y+h,f],[a,y+h,g],c);quad([b,y,f],[b,y,g],[b,y+h,g],[b,y+h,f],c);quad([a,y+h,f],[b,y+h,f],[b,y+h,g],[a,y+h,g],c)}
 function patch(x,z,w,d,c){box(x,-.015,z,w,.065,d,c)}
@@ -40,7 +40,7 @@ function wheel(x,z,r=.22){const n=12,c=[.68,.59,.44],cy=.12+r;for(let i=0;i<n;i+
 function enrichHouse(i){let {x,z,w,d}=i;if(w===1){jar(x+.25,z+.25,.09);return}jar(x+w*.30,z+d*.10);paving(x,z-d*.28,Math.min(.8,w*.46),.32);if(d>=3){box(x+w*.33,.07,z-d*.10,.34,.08,.28,wood);box(x+w*.33,.15,z-d*.10,.30,.06,.24,woodLight);jar(x+w*.32,z+d*.02,.10)}if(w>=4){gate(x,z-d*.45,.42);paving(x,z-d*.17,.75,.72);well(x+w*.29,z+d*.03);shadeTree(x-w*.32,z-d*.32,.75);for(let k=0;k<4;k++)jar(x-w*.33+k*.12,z+d*.37,.09);box(x+w*.34,.06,z+d*.36,.30,.16,.30,[.54,.35,.22]);if(d>=6){building(x+w*.28,z-d*.26,.75,.65,true,true);building(x-w*.29,z+d*.08,.65,.55,false,false);paving(x,z+d*.23,1.15,.52);for(let k=0;k<5;k++)bush(x+w*.40,z-d*.37+k*.17,.13);shadeTree(x+w*.32,z+d*.34,.62)}}}
 function enrichRice(i){let {x,z,w,d}=i;if(w===1){box(x,.06,z+d*.46,.24,.04,.06,[.58,.50,.33]);return}if(w>=4){let left=x-w*.45,front=z-d*.45;gate(left,front,.28);for(let j=0;j<3;j++)bush(x+w*.4,z-d*.32+j*.16,.14);box(x-w*.36,.07,z+d*.34,.28,.08,.14,woodLight);jar(x-w*.37,z+d*.22,.11)}if(w>=8){box(x,.09,z,d*.45,.055,.14,[.68,.56,.37]);for(let q of [-.19,.19])box(x+q,.16,z,.05,.1,.18,wood);box(x+w*.34,.05,z-d*.34,.28,.3,.28,brick);box(x+w*.34,.35,z-d*.34,.34,.055,.34,brickLight);building(x+w*.34,z+d*.34,.55,.5,true,true);shadeTree(x+w*.40,z-d*.08,.70);for(let j=0;j<4;j++)box(x-w*.23+j*.17,.10,z-d*.24,.12,.025,.12,[.70,.64,.48])}}
 function enrichLumber(i){let {x,z,w,d}=i;if(w===1){box(x+.30,.05,z-.24,.17,.15,.17,woodLight);box(x+.30,.20,z-.24,.12,.045,.12,wood);return}frame(x+w*.27,z-d*.06);pile(x+w*.22,z+d*.13,w>=4?9:4);if(w>=4){gate(x,z-d*.45,.40);paving(x,z,.82,.68);wheel(x+w*.15,z+.04,.24);building(x-w*.33,z-d*.30,.58,.60,true,true);for(let j=0;j<3;j++)box(x-w*.30,.10+j*.075,z-d*.30,.40,.055,.23,woodLight);shadeTree(x-w*.37,z+d*.33,.65);for(let j=0;j<3;j++)jar(x+w*.35,z+d*.12+j*.13,.09);box(x+w*.34,.05,z-d*.30,.05,.95,.05,beam);box(x+w*.40,.65,z-d*.30,.24,.20,.025,brick)}}
-for(const i of items){if(i.kind==='house'){compound(i);enrichHouse(i)}else if(i.kind==='rice'){riceField(i);enrichRice(i)}else{lumber(i);enrichLumber(i)}}
+for(const i of selected){if(i.kind==='house'){compound(i);enrichHouse(i)}else if(i.kind==='rice'){riceField(i);enrichRice(i)}else{lumber(i);enrichLumber(i)}}
 }
 root.AssetStudy={items,build};
 })(typeof globalThis!=='undefined'?globalThis:this);
