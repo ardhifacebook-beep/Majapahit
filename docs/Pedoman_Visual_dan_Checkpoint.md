@@ -1,7 +1,7 @@
 # Game AHS — Pedoman Visual dan Fondasi Kode
 
 **Proyek:** County builder 3D berlatar Majapahit, dapat dimainkan di browser  
-**Status:** Acuan pengembangan yang disepakati, checkpoint generator peta, perbukitan tinggi, dan sungai bercabang  
+**Status:** Acuan pengembangan yang disepakati, checkpoint studi 11 variasi aset Majapahit  
 **Tanggal:** 23 November 2026  
 **Demo:** [Tanah Majapahit](https://majapahit-terrain-ahs.vast-vine-9923.chatgpt.site)
 
@@ -45,7 +45,7 @@ CityRT dan gambar referensi pengguna menjadi **acuan rasa visual**: dunia sepert
 | Tile | Klik menampilkan perkiraan lokasi tile dan klasifikasi darat/sungai; pemilihan saat ini memakai pendekatan bidang datar sehingga belum presisi untuk kontur atau objek yang lebih kompleks. |
 | Variasi dunia | Tombol menghasilkan peta berdasarkan seed, termasuk bentuk air, bukit, hutan dan vegetasi; input seed memungkinkan membuka peta yang sama pada versi generator yang sama. |
 
-**Batas saat ini:** Ini prototipe visual, belum mencakup bangunan, ekonomi, penduduk, jalan, penyimpanan permainan, atau sistem konstruksi. Renderer cadangan dapat lebih lambat, terutama saat geometri bertambah. Tidak ada klaim performa atau kompatibilitas pada semua perangkat tanpa pengujian.
+**Batas saat ini:** Ini prototipe visual dengan model bangunan di area studi; belum mencakup mekanik penempatan atau upgrade bangunan, ekonomi, penduduk, jalan, maupun penyimpanan permainan. Renderer cadangan dapat lebih lambat, terutama saat geometri bertambah. Tidak ada klaim performa atau kompatibilitas pada semua perangkat tanpa pengujian.
 
 ## 4. Susunan kode
 
@@ -55,12 +55,13 @@ CityRT dan gambar referensi pengguna menjadi **acuan rasa visual**: dunia sepert
 - `dist/style.css` — tampilan antarmuka dan penyesuaian ukuran layar.
 - `dist/game.js` — pembuatan geometri terrain dan pepohonan, pewarnaan, renderer, kamera dan interaksi prototipe.
 - `dist/map.js` — generator peta berbasis seed, tipe terrain dan bentuk bentang alam.
+- `dist/assets.js` — model 3D prosedural untuk studi aset rumah, sawah dan tempat kerja kayu.
 - `ART_DIRECTION.md` — catatan singkat arahan seni di dalam proyek.
 - Konfigurasi hosting milik proyek prototipe terpisah dan tidak disalin ke repository ini.
 
-Kode prototipe saat ini menggunakan `game.js` dan `map.js`. Saat kompleksitas bertambah, pisahkan generator terrain, aset, renderer, kamera, interaksi dan state secara bertahap tanpa mengubah arah visual atau mekanik yang disetujui. Simpan grid logis terpisah dari tampilan permukaan sehingga tile tidak harus terlihat sebagai kotak.
+Kode prototipe saat ini menggunakan `game.js`, `map.js` dan `assets.js`. Saat kompleksitas bertambah, pisahkan generator terrain, aset, renderer, kamera, interaksi dan state secara bertahap tanpa mengubah arah visual atau mekanik yang disetujui. Simpan grid logis terpisah dari tampilan permukaan sehingga tile tidak harus terlihat sebagai kotak.
 
-**Titik acuan sumber prototipe saat ini:** commit `0c1871cc492c88738a9482e84f5760a1fc543a2c`, generator peta dengan perbukitan tinggi. Versi peta 125 × 125 sebelumnya: `98a6281f4d2d1a00be478102dab1fb8478dbfedb`. Titik acuan sebelumnya: `1b121b7a14ab1c8153e2007ed6a79fdfa3a1c9b7` untuk style tropis awal. Commit tersebut adalah identitas versi di repository asal. Kode checkpoint juga tersedia di repository GitHub ini.
+**Titik acuan sumber prototipe saat ini:** commit `d64649f9cee37e5c738fa3743e8e379ad3104ceb`, studi aset dengan detail bertahap. Versi generator peta sebelumnya: `0c1871cc492c88738a9482e84f5760a1fc543a2c`. Versi peta 125 × 125 sebelumnya: `98a6281f4d2d1a00be478102dab1fb8478dbfedb`. Titik acuan sebelumnya: `1b121b7a14ab1c8153e2007ed6a79fdfa3a1c9b7` untuk style tropis awal. Commit tersebut adalah identitas versi di repository asal. Kode checkpoint juga tersedia di repository GitHub ini.
 
 ## 5. Aturan ketika melanjutkan pengembangan
 
@@ -119,3 +120,16 @@ Kode prototipe saat ini menggunakan `game.js` dan `map.js`. Saat kompleksitas be
 - Acuan awal untuk evaluasi: manusia dewasa sekitar 1,7 m; rumah sederhana lebar sekitar 5–10 m; pohon kecil–sedang tinggi sekitar 5–12 m; pohon besar sekitar 15–25 m atau lebih. Rentang ini adalah ilustrasi, belum menjadi spesifikasi final atau ketentuan gameplay.
 - Buat atau gunakan figur manusia dan model rumah sebagai pembanding saat aset tersebut dikerjakan. Pertimbangkan variasi ukuran pohon, termasuk mempertahankan beberapa pohon besar. Proporsi visual boleh sedikit distilisasi agar terbaca dari kamera atas.
 - Ukuran akhir aset, jumlah pohon per tile dan perubahan visual akan diputuskan setelah evaluasi dan arahan pengguna. Checkpoint ini hanya mencatat rencana; tidak ada perubahan kode atau aset.
+
+
+## 10. Checkpoint — Studi aset Majapahit
+
+**Tanggal:** 23 November 2026  
+**Status:** Pengguna menyukai versi detail bertahap dan meminta checkpoint GitHub.
+
+- Sebelas variasi aset 3D: rumah rakyat 1 × 1, 2 × 2, 2 × 3, 4 × 4 dan 4 × 6 tile; sawah 1 × 1, 4 × 4 dan 8 × 8 tile; lumber house 1 × 1, 2 × 2 dan 4 × 4 tile.
+- Ukuran yang lebih besar menampilkan kompleks dan detail bertahap, seperti halaman, gerbang, sumur, saung, pengairan, bengkel dan penyimpanan kayu. Arahan visual mengikuti referensi konsep Majapahit pengguna dan style game yang sudah ada.
+- Aset berada di area studi pada peta; pemain dapat memilih aset untuk mendekatkan kamera, kembali ke tampilan area atau menyembunyikan studi aset. Ini merupakan studi visual, bukan mekanik penempatan, produksi atau upgrade.
+- Skala acuan tetap 10 × 10 meter per tile. Proporsi manusia, pohon dan bangunan masih perlu dikalibrasi.
+- Commit sumber prototipe terpisah: `d64649f9cee37e5c738fa3743e8e379ad3104ceb`. Kode dan dokumen checkpoint tersedia bersama pada commit GitHub yang memuat bagian ini.
+- Validasi: sintaks ketiga file JavaScript diperiksa; uji simulasi memuat 11 aset, label dan pemilih. Versi ini belum diperiksa langsung di browser oleh asisten; pengguna telah melihat dan menyukainya.
