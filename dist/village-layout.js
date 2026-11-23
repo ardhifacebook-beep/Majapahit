@@ -86,6 +86,129 @@
     return best && { x: best.x, z: best.z };
   }
 
+  function route(start, goal, walkable, salt, maxSteps = 2400) {
+    const key = (x, z) => `${x},${z}`;
+    const open = [{ x: start[0], z: start[1], g: 0, f: Math.hypot(goal[0] - start[0], goal[1] - start[1]) }];
+    const cameFrom = new Map();
+    const costs = new Map([[key(start[0], start[1]), 0]]);
+    const closed = new Set();
+    const directions = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+    let steps = 0;
+
+    while (open.length && steps++ < maxSteps) {
+      open.sort((a, b) => b.f - a.f);
+      const current = open.pop();
+      const currentKey = key(current.x, current.z);
+      if (closed.has(currentKey)) continue;
+      if (current.x === goal[0] && current.z === goal[1]) {
+        const path = [[current.x, current.z]];
+        let cursor = currentKey;
+        while (cameFrom.has(cursor)) {
+          cursor = cameFrom.get(cursor);
+          const [x, z] = cursor.split(',').map(Number);
+          path.push([x, z]);
+        }
+        return path.reverse();
+      }
+
+      closed.add(currentKey);
+      for (let i = 0; i < directions.length; i++) {
+        const [dx, dz] = directions[i];
+        const x = current.x + dx;
+        const z = current.z + dz;
+        const nextKey = key(x, z);
+        if (closed.has(nextKey)) continue;
+        const terrainCost = walkable(x, z);
+        if (!Number.isFinite(terrainCost) || terrainCost <= 0) continue;
+        const stepCost = (dx && dz ? 1.42 : 1) * terrainCost + hashNoise(x, z, salt) * 0.22;
+        const nextCost = current.g + stepCost;
+        if (nextCost >= (costs.get(nextKey) ?? Infinity)) continue;
+        costs.set(nextKey, nextCost);
+        cameFrom.set(nextKey, currentKey);
+        open.push({ x, z, g: nextCost, f: nextCost + Math.hypot(goal[0] - x, goal[1] - z) });
+      }
+    }
+    return null;
+  }
+
+  function ensureStreets(village, buildings, walkable, salt = 1) {
+    if (!village.layout || village.layout.version !== 1) {
+      village.layout = { version: 1, seed: salt, streets: [], connected: [] };
+    }
+    const layout = village.layout;
+    if (!Array.isArray(layout.streets)) layout.streets = [];
+    if (!Array.isArray(layout.connected)) layout.connected = [];
+    if (!Number.isFinite(layout.seed)) layout.seed = salt;
+
+    const roadNodes = new Map();
+    for (const street of layout.streets) {
+      for (const point of street.path || []) roadNodes.set(`${point[0]},${point[1]}`, point);
+    }
+
+    const findWalkableNear = (x, z) => {
+      const choices = [];
+      for (let radius = 0; radius <= 4; radius++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          for (let dz = -radius; dz <= radius; dz++) {
+            if (Math.max(Math.abs(dx), Math.abs(dz)) !== radius) continue;
+            const px = x + dx;
+            const pz = z + dz;
+            if (Number.isFinite(walkable(px, pz))) choices.push({ x: px, z: pz, distance: dx * dx + dz * dz });
+          }
+        }
+        if (choices.length) break;
+      }
+      choices.sort((a, b) => a.distance - b.distance);
+      return choices[0] && [choices[0].x, choices[0].z];
+    };
+
+    if (!roadNodes.size) {
+      const center = findWalkableNear(Math.floor(village.x), Math.floor(village.z));
+      if (center) roadNodes.set(`${center[0]},${center[1]}`, center);
+    }
+
+    const pending = buildings.filter((building, index) => {
+      const signature = `${building.id || index}:${building.kind}:${building.x}:${building.z}:${building.w}:${building.d}`;
+      return !layout.connected.includes(signature);
+    });
+    pending.sort((a, b) => {
+      const rank = kind => kind === 'house' ? 0 : kind === (village.role === 'rice' ? 'rice' : 'wood') ? 1 : 2;
+      return rank(a.kind) - rank(b.kind);
+    });
+
+    for (let index = 0; index < pending.length; index++) {
+      const building = pending[index];
+      const signature = `${building.id || buildings.indexOf(building)}:${building.kind}:${building.x}:${building.z}:${building.w}:${building.d}`;
+      const frontages = [];
+      for (let x = building.x; x < building.x + building.w; x++) {
+        frontages.push([x, building.z - 1], [x, building.z + building.d]);
+      }
+      for (let z = building.z; z < building.z + building.d; z++) {
+        frontages.push([building.x - 1, z], [building.x + building.w, z]);
+      }
+      const choices = frontages.filter(([x, z]) => Number.isFinite(walkable(x, z))).map(([x, z]) => ({
+        x, z,
+        nearest: Math.min(...[...roadNodes.values()].map(([rx, rz]) => Math.hypot(rx - x, rz - z)))
+      })).sort((a, b) => a.nearest - b.nearest || hashNoise(a.x, a.z, layout.seed) - hashNoise(b.x, b.z, layout.seed));
+
+      let connected = false;
+      for (const target of choices.slice(0, 8)) {
+        const starts = [...roadNodes.values()].sort((a, b) => Math.hypot(a[0] - target.x, a[1] - target.z) - Math.hypot(b[0] - target.x, b[1] - target.z));
+        for (const start of starts.slice(0, 5)) {
+          const path = route(start, [target.x, target.z], walkable, layout.seed + index * 37);
+          if (!path || path.length < 2) continue;
+          layout.streets.push({ path });
+          for (const point of path) roadNodes.set(`${point[0]},${point[1]}`, point);
+          connected = true;
+          break;
+        }
+        if (connected) break;
+      }
+      if (connected) layout.connected.push(signature);
+    }
+    return layout.streets;
+  }
+
   function visualGroups(buildings) {
     const remaining = new Set(buildings);
     const output = [];
@@ -149,5 +272,5 @@
     return output;
   }
 
-  root.VillageLayout = { chooseSite, visualGroups };
+  root.VillageLayout = { chooseSite, ensureStreets, visualGroups };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
