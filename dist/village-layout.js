@@ -1,42 +1,40 @@
 /* Street-front parcels. Economic buildings remain the source of capacity and cost. */
 (function(root){'use strict';
-const VERSION=4;
+const VERSION=6;
 const MERGE_SIZES={house:[[4,6],[4,4],[2,3],[2,2]],rice:[[8,8],[4,4]],wood:[[4,4],[2,2]]};
 const overlap=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.z<b.z+b.d&&a.z+a.d>b.z;
 function line(a,b){const out=[a];let [x,z]=a;while(x!==b[0]||z!==b[1]){if(x!==b[0])x+=Math.sign(b[0]-x);else z+=Math.sign(b[1]-z);out.push([x,z])}return out}
+function hash(x,z,seed=0){const n=Math.sin(x*127.1+z*311.7+seed*74.7)*43758.5453;return n-Math.floor(n)}
 function allocate(v,kind,w,d,valid){
- const cx=Math.floor(v.x),cz=Math.floor(v.z),layout=v.layout;
- const fit=block=>{
-   if(block.kind!==kind||w>block.w||d>block.d)return null;
-   // Complete the row along the street before growing the block inward.
-   for(let row=0;row<=block.d-d;row++)for(let col=0;col<=block.w-w;col++){
-     const x=block.x+col,z=block.front==='south'?block.z+block.d-d-row:block.z+row;
-     const b={x,z,w,d};
-     if(v.buildings.some(other=>overlap(b,other))||!valid(x,z,w,d))continue;
-     return {x,z,rotation:block.front==='south'?Math.PI:0};
-   }return null;
- };
- for(const block of layout.blocks){const pos=fit(block);if(pos)return pos}
- const bw=Math.max(w,kind==='house'?2:4),bd=Math.max(d,kind==='house'?3:4);
+ const layout=v.layout, cx=Math.floor(v.x),cz=Math.floor(v.z), buildings=v.buildings;
  const candidates=[];
- for(let offset=2;offset<=23;offset++)for(const side of [-1,1])for(const direction of [-1,1]){
-   const front=direction<0?'south':'north';
-   const block={kind,w:bw,d:bd,x:side<0?cx-1-bw:cx+2,z:direction<0?cz-offset-bd+1:cz+offset,front};
-   const laneZ=front==='south'?block.z+bd:block.z-1;
-   const outerX=side<0?block.x:block.x+bw-1;
-   const street=line([cx,cz],[cx,laneZ]).concat(line([cx,laneZ],[outerX,laneZ]).slice(1));
-   const expanded={x:block.x-.5,z:block.z-.5,w:bw+1,d:bd+1};
-   if(layout.blocks.some(other=>overlap(expanded,other)))continue;
-   if(layout.streets.some(road=>road.path.some(([x,z])=>x>=block.x&&x<block.x+bw&&z>=block.z&&z<block.z+bd)))continue;
-   if(!valid(block.x,block.z,bw,bd))continue;
-   if(street.some(([x,z])=>!valid(x,z,1,1,true)||layout.blocks.some(b=>x>=b.x&&x<b.x+b.w&&z>=b.z&&z<b.z+b.d)))continue;
-   const preference=kind==='house'?direction<0:direction>0;
-   const score=offset+(preference?0:9)+(side<0?0:.25);
-   candidates.push({block,street,score});
+ // Try positions around lived-in edges first; the preferred direction varies by settlement and history.
+ const seed=String(v.id||'').split('').reduce((n,c)=>n+c.charCodeAt(0),0)+buildings.length*17;
+ for(let radius=1;radius<=13;radius++)for(let x=cx-radius-5;x<=cx+radius+5;x++)for(let z=cz-radius-5;z<=cz+radius+5;z++){
+   const dist=Math.hypot(x+w/2-cx,z+d/2-cz);if(dist>radius+1||dist<1.55)continue;
+   for(const rot of [0,Math.PI]){const rw=w,rd=d;const b={x,z,w:rw,d:rd};
+     if(buildings.some(o=>overlap(b,o))||layout.streets.some(r=>r.path.some(([rx,rz])=>rx>=x&&rx<x+rw&&rz>=z&&rz<z+rd))||!valid(x,z,rw,rd))continue;
+     const same=buildings.filter(o=>o.kind===kind),all=buildings;
+     const nearSame=same.length?Math.min(...same.map(o=>Math.hypot(x+rw/2-o.x-o.w/2,z+rd/2-o.z-o.d/2))):8;
+     const nearAny=all.length?Math.min(...all.map(o=>Math.hypot(x+rw/2-o.x-o.w/2,z+rd/2-o.z-o.d/2))):dist;
+     const radial=kind==='house'?dist:dist+3;
+     const crowd=all.reduce((n,o)=>n+Math.max(0,2.5-Math.hypot(x+rw/2-o.x-o.w/2,z+rd/2-o.z-o.d/2)),0);
+     const noise=hash(x,z,seed)*1.2+(rot?hash(x,z,seed+9)*.9:0);
+     let score=radial*.55+nearAny*.35+crowd*.25+noise;
+     if(same.length)score+=Math.min(nearSame,8)*.32;
+     if(kind==='rice')score+=dist<3?6:0;
+     if(kind==='wood')score+=dist<2?5:0;
+     candidates.push({x,z,w:rw,d:rd,rotation:rot,score,dist});
+   }
  }
  candidates.sort((a,b)=>a.score-b.score);
- for(const candidate of candidates){layout.blocks.push(candidate.block);const pos=fit(candidate.block);if(pos){layout.streets.push({path:candidate.street});return pos}layout.blocks.pop()}
- return null;
+ // Try candidates in score order; route to a free cell beside the footprint.
+ const route=(goal,foot)=>{const start=[cx,cz],q=[start],prev=new Map([[start.join(','),null]]);let end=null;for(let h=0;h<q.length;h++){const [x,z]=q[h];if(x===goal[0]&&z===goal[1]){end=[x,z];break}for(const [dx,dz]of [[1,0],[-1,0],[0,1],[0,-1]]){const nx=x+dx,nz=z+dz,k=nx+','+nz;if(prev.has(k)||nx<cx-20||nx>cx+20||nz<cz-20||nz>cz+20)continue;if(buildings.some(o=>nx>=o.x&&nx<o.x+o.w&&nz>=o.z&&nz<o.z+o.d)||nx>=foot.x&&nx<foot.x+foot.w&&nz>=foot.z&&nz<foot.z+foot.d)continue;prev.set(k,[x,z]);q.push([nx,nz])}}if(!end)return null;const path=[];while(end){path.push(end);end=prev.get(end.join(','))}return path.reverse()};
+ let chosen=null,clean=null;
+ for(const c of candidates){const targets=[[c.x-1,Math.floor(c.z+c.d/2)],[c.x+c.w,Math.floor(c.z+c.d/2)],[Math.floor(c.x+c.w/2),c.z-1],[Math.floor(c.x+c.w/2),c.z+c.d]].sort((a,b)=>Math.hypot(a[0]-cx,a[1]-cz)-Math.hypot(b[0]-cx,b[1]-cz));let best=null;for(const t of targets){const p=route(t,c);if(p&&(!best||p.length<best.length))best=p}if(best){chosen=c;clean=best;break}}
+ if(!chosen)return null;
+ if(clean.length>1){const key=clean.map(p=>p.join(',')).join(';');if(!layout.streets.some(r=>r.key===key))layout.streets.push({kind:layout.streets.length?'lane':'main',key,path:clean})}
+ return {x:chosen.x,z:chosen.z,rotation:chosen.rotation};
 }
 function migrate(v,valid){
  if(v.layout?.version===VERSION)return false;
@@ -54,8 +52,8 @@ function chooseSite(v,kind,w,d,valid){
  v.layout=draft.layout;return pos;
 }
 function orientedGroups(v){return visualGroups(v.buildings).map(item=>{
- const block=v.layout?.blocks?.find(b=>item.x-item.w/2>=b.x&&item.z-item.d/2>=b.z&&item.x+item.w/2<=b.x+b.w&&item.z+item.d/2<=b.z+b.d);
- return {...item,rotation:block?.front==='south'?Math.PI:0};
+ const members=v.buildings.filter(b=>b.kind===item.kind&&b.x>=item.x-item.w/2&&b.x<item.x+item.w/2&&b.z>=item.z-item.d/2&&b.z<item.z+item.d/2);
+ return {...item,rotation:members[0]?.rotation||0};
 })}
   function visualGroups(buildings) {
     const remaining = new Set(buildings);
@@ -81,7 +79,7 @@ function orientedGroups(v){return visualGroups(v.buildings).map(item=>{
             for (let tx = x; tx < x + w && complete; tx++) {
               for (let tz = z; tz < z + d; tz++) {
                 const member = occupancy.get(`${tx},${tz}`);
-                if (!member || member.kind !== building.kind || !remaining.has(member)) {
+                if (!member || member.kind !== building.kind || member.rotation !== building.rotation || !remaining.has(member)) {
                   complete = false;
                   break;
                 }
