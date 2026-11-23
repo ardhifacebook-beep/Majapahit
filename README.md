@@ -7,4 +7,4 @@ Prototipe game county builder 3D berbasis browser dengan latar Majapahit dan lan
 - [Pedoman visual, fondasi kode, dan checkpoint](docs/Pedoman_Visual_dan_Checkpoint.md)
 - [Buka prototipe terrain](https://majapahit-terrain-ahs.vast-vine-9923.chatgpt.site)
 
-Prototipe saat ini memiliki peta 125 × 125 tile. Kode sumber game masih berada di proyek prototipe terpisah dan belum disalin ke repository ini.
+Prototipe saat ini memiliki peta 125 × 125 tile. Kode sumber checkpoint tersedia di folder `dist/`; buka `dist/index.html` melalui server web statis. Salinan ini tidak otomatis tersinkron dengan prototipe yang di-host.

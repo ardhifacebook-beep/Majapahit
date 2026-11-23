@@ -48,17 +48,17 @@ CityRT dan gambar referensi pengguna menjadi **acuan rasa visual**: dunia sepert
 
 ## 4. Susunan kode
 
-> Catatan: susunan dan commit di bawah merujuk ke repository sumber prototipe yang terpisah, bukan ke repository GitHub ini. Kode game belum disalin ke repository GitHub ini.
+> Kode prototipe checkpoint telah disalin ke repository GitHub ini. Commit berawalan `98a6281` di bawah merujuk ke repository sumber prototipe terpisah, bukan riwayat GitHub ini.
 
 - `dist/index.html` — struktur halaman, kanvas dan kontrol.
 - `dist/style.css` — tampilan antarmuka dan penyesuaian ukuran layar.
 - `dist/game.js` — pembuatan geometri terrain dan pepohonan, pewarnaan, renderer, kamera dan interaksi prototipe.
 - `ART_DIRECTION.md` — catatan singkat arahan seni di dalam proyek.
-- `.openai/hosting.json` — konfigurasi proyek dan direktori hasil untuk hosting.
+- Konfigurasi hosting milik proyek prototipe terpisah dan tidak disalin ke repository ini.
 
 Kode prototipe saat ini disusun dalam satu file JavaScript. Saat kompleksitas bertambah, pisahkan generator terrain, aset, renderer, kamera, interaksi dan state secara bertahap tanpa mengubah arah visual atau mekanik yang disetujui. Simpan grid logis terpisah dari tampilan permukaan sehingga tile tidak harus terlihat sebagai kotak.
 
-**Titik acuan kode saat ini:** commit `98a6281f4d2d1a00be478102dab1fb8478dbfedb`, versi peta 125 × 125 yang disetujui pengguna. Titik acuan sebelumnya: `1b121b7a14ab1c8153e2007ed6a79fdfa3a1c9b7` untuk style tropis awal. Commit ini adalah identitas versi kode, bukan salinan kode sumber; proyek dan riwayat sumber tetap diperlukan untuk memulihkannya.
+**Titik acuan kode saat ini:** commit `98a6281f4d2d1a00be478102dab1fb8478dbfedb`, versi peta 125 × 125 yang disetujui pengguna. Titik acuan sebelumnya: `1b121b7a14ab1c8153e2007ed6a79fdfa3a1c9b7` untuk style tropis awal. Commit tersebut adalah identitas versi di repository asal. Kode checkpoint juga tersedia di repository GitHub ini.
 
 ## 5. Aturan ketika melanjutkan pengembangan
 
