@@ -92,6 +92,14 @@ test('migration preserves economic state and becomes stable', () => {
     assert.equal(JSON.stringify(v), saved);
     check(v);
     assertStreetNetwork(v);
+    assert.ok(v.layout.streets.some(road => road.kind === 'ring'), 'layout has a curved lane between inner homes and outer work');
+    assert.equal(v.layout.clusters.reduce((n, c) => n + c.buildingIds.length, 0), v.buildings.length, 'every building belongs to a small cluster');
+    assert.ok(v.layout.clusters.every(c => c.tiles <= 4), 'ordinary clusters target four tiles or fewer');
+    const meanRadius = kind => {
+      const items = v.buildings.filter(b => b.kind === kind);
+      return items.reduce((n, b) => n + Math.hypot(b.x + b.w / 2 - v.x, b.z + b.d / 2 - v.z), 0) / items.length;
+    };
+    assert.ok(meanRadius('house') < meanRadius(role === 'rice' ? 'rice' : 'wood'), 'homes sit inward of the production ring');
   }
 });
 

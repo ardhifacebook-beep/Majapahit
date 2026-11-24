@@ -2,7 +2,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 7;
+  const VERSION = 9;
   const REORGANIZE_EVERY = 5;
   const MERGE_SIZES = {
     house: [[4, 6], [4, 4], [2, 3], [2, 2]],
@@ -119,7 +119,7 @@
     return targets;
   }
 
-  function allocate(v, kind, w, d, valid) {
+  function allocate(v, kind, w, d, valid, formation = {}) {
     const layout = v.layout, cx = Math.floor(v.x), cz = Math.floor(v.z), buildings = v.buildings;
     const seed = hashString(`${v.id}:${layout.generation || 0}:${buildings.length}:${kind}`);
     const totalArea = buildings.reduce((sum, b) => sum + b.w * b.d, w * d);
@@ -145,11 +145,21 @@
 
         const nearAny = buildings.length ? Math.min(...buildings.map(b => Math.hypot(x + w / 2 - b.x - b.w / 2, z + d / 2 - b.z - b.d / 2))) : dist;
         const nearSame = same.length ? Math.min(...same.map(b => Math.hypot(x + w / 2 - b.x - b.w / 2, z + d / 2 - b.z - b.d / 2))) : 5;
-        const idealRadius = kind === 'house' ? 4.2 : 7.4;
-        const clusterBias = kind === 'house' ? nearAny * .40 : nearSame * .48 + nearAny * .14;
-        const radialBias = Math.abs(dist - idealRadius) * (kind === 'house' ? .30 : .23);
-        const irregular = noise(x, z, seed) * 1.35;
-        candidates.push({ ...candidate, score: clusterBias + radialBias + irregular });
+        const targetRadius = formation.radius ?? (kind === 'house' ? 4.4 : 10.8);
+        const targetAngle = formation.angle ?? Math.atan2(dz, dx);
+        const angle = Math.atan2(dz, dx);
+        let angleDelta = Math.abs(angle - targetAngle) % (Math.PI * 2);
+        angleDelta = Math.min(angleDelta, Math.PI * 2 - angleDelta);
+        const anchorDistance = formation.anchor
+          ? Math.hypot(x + w / 2 - formation.anchor[0], z + d / 2 - formation.anchor[1])
+          : 0;
+        const clusterBias = formation.anchor
+          ? anchorDistance * 1.1 + (formation.members.length ? nearSame * .72 : nearAny * .08)
+          : kind === 'house' ? nearAny * .40 : nearSame * .48 + nearAny * .14;
+        const radialBias = Math.abs(dist - targetRadius) * (kind === 'house' ? .42 : .30);
+        const angularBias = angleDelta * targetRadius * .34;
+        const irregular = noise(x, z, seed) * 1.1;
+        candidates.push({ ...candidate, score: clusterBias + radialBias + angularBias + irregular });
       }
     }
     candidates.sort((a, b) => a.score - b.score);
@@ -163,7 +173,14 @@
       let best = null;
       for (const target of targets) {
         const path = pathToRoad(target.cell, candidate, buildings, roadCells, valid, seed + candidate.x * 41 + candidate.z * 17, radius);
-        if (path && (!best || path.length < best.path.length)) best = { ...target, path };
+        if (!path) continue;
+        const pathLength = path.length;
+        const preferredOutwardAccess = formation.anchor
+          ? Math.max(0, Math.hypot(target.cell[0] - cx, target.cell[1] - cz) - Math.hypot(candidate.x + w / 2 - cx, candidate.z + d / 2 - cz)) * .5
+          : 0;
+        if (!best || pathLength - preferredOutwardAccess < best.path.length - (best.preferredOutwardAccess || 0)) {
+          best = { ...target, path, preferredOutwardAccess };
+        }
       }
       if (!best) continue;
       if (best.path.length > 1) {
@@ -177,28 +194,108 @@
     return null;
   }
 
+  function buildingClusters(buildings, villageId) {
+    const clusters = [];
+    for (const kind of ['house', 'rice', 'wood']) {
+      const members = buildings.filter(b => b.kind === kind)
+        .sort((a, b) => b.w * b.d - a.w * a.d || String(a.id).localeCompare(String(b.id)));
+      let cluster = null;
+      for (const building of members) {
+        const area = building.w * building.d;
+        if (!cluster || cluster.tiles + area > 4) {
+          cluster = { id: `${villageId}-${kind}-${clusters.filter(c => c.kind === kind).length}`, kind, tiles: 0, buildings: [] };
+          clusters.push(cluster);
+        }
+        cluster.tiles += area;
+        cluster.buildings.push(building);
+        if (area >= 4) cluster = null;
+      }
+    }
+    return clusters;
+  }
+
+  function addCurvedRingLane(v, valid, radius, seed, angle) {
+    const cx = Math.floor(v.x), cz = Math.floor(v.z), layout = v.layout;
+    const buildings = v.buildings, span = 1.12, samples = Math.max(16, Math.ceil(radius * span * 8));
+    const cells = [];
+    for (let i = 0; i <= samples; i++) {
+      const theta = angle - span / 2 + span * i / samples;
+      const bend = (noise(i, Math.floor(seed % 997), seed) - .5) * .36;
+      const x = Math.round(cx + Math.cos(theta) * (radius + bend));
+      const z = Math.round(cz + Math.sin(theta) * (radius + bend));
+      const cell = key(x, z);
+      if (cells.at(-1)?.key !== cell) cells.push({ key: cell, point: [x, z] });
+    }
+    if (cells.length > 1 && cells[0].key === cells.at(-1).key) cells.pop();
+    const clear = ({ point: [x, z] }) => !buildings.some(b => x >= b.x && x < b.x + b.w && z >= b.z && z < b.z + b.d) && valid(x, z, 1, 1, true);
+    // Keep the longest clear curved segment; it remains connected to the central plaza.
+    let best = [], run = [];
+    for (const cell of [...cells, { key: 'break', point: [NaN, NaN] }]) {
+      if (cell.key !== 'break' && clear(cell) && (!run.length || Math.max(Math.abs(cell.point[0] - run.at(-1)[0]), Math.abs(cell.point[1] - run.at(-1)[1])) === 1)) run.push(cell.point);
+      else {
+        if (run.length > best.length) best = run;
+        run = cell.key !== 'break' && clear(cell) ? [cell.point] : [];
+      }
+    }
+    if (best.length < 4) return;
+    const centerRoads = new Set(layout.streets.flatMap(road => road.path.map(([x, z]) => key(x, z))));
+    const start = best[0];
+    const join = pathToRoad(start, { x: cx, z: cz, w: 0, d: 0 }, buildings, centerRoads, valid, seed, Math.ceil(radius + 7));
+    if (!join) return;
+    layout.streets.push({ kind: 'main', key: join.map(([x, z]) => key(x, z)).join(';'), path: join });
+    layout.streets.push({ kind: 'ring', key: best.map(([x, z]) => key(x, z)).join(';'), path: best });
+  }
+
   function plan(v, valid, generation) {
     const cx = Math.floor(v.x), cz = Math.floor(v.z);
     const draft = {
       ...v,
       buildings: [],
-      layout: { version: VERSION, generation, lastBuildingCount: v.buildings.length, blocks: [], streets: [] }
+      layout: { version: VERSION, generation, lastBuildingCount: v.buildings.length, blocks: [], streets: [], clusters: [] }
     };
-    // Homes establish the settlement core; work areas then cluster along its growing edge.
-    const originals = [...v.buildings].sort((a, b) => {
-      const order = { house: 0, rice: 1, wood: 2 };
-      return (order[a.kind] ?? 3) - (order[b.kind] ?? 3) || b.w * b.d - a.w * a.d || String(a.id).localeCompare(String(b.id));
-    });
-    // A short plaza lane gives the road tree a visible and consistent village center.
+    // The plaza and irregular ring lane shape a village rather than a uniform block.
     const roadSeed = [[cx, cz], [cx, cz + 1]];
     draft.layout.streets.push({ kind: 'main', key: roadSeed.map(([x, z]) => key(x, z)).join(';'), path: roadSeed });
-    for (const building of originals) {
-      const pos = allocate(draft, building.kind, building.w, building.d, valid);
-      if (!pos) return null;
-      draft.buildings.push({ ...building, ...pos });
+    const totalArea = v.buildings.reduce((sum, b) => sum + b.w * b.d, 0);
+    const clusters = buildingClusters(v.buildings, v.id);
+    const phase = (hashString(`${v.id}:city-ring`) / 4294967295) * Math.PI * 2;
+    const ringRadius = Math.min(12, Math.max(4.6, 4.6 + Math.sqrt(totalArea) * .25));
+    const ringRadii = new Set();
+    clusters.filter(cluster => cluster.kind !== 'house').forEach(cluster => {
+      const index = cluster.kind === 'rice'
+        ? clusters.filter(c => c.kind === 'rice').indexOf(cluster)
+        : clusters.filter(c => c.kind === 'wood').indexOf(cluster);
+      const ringLayer = Math.floor(index / 7);
+      const roadRadius = ringRadius + ringLayer * 3.1;
+      const clusterAngle = phase + index * 2.399963229728653 + (noise(index, cluster.tiles, hashString(v.id)) - .5) * .84;
+      const ringKey = `${roadRadius.toFixed(2)}:${Math.round(clusterAngle * 5)}`;
+      if (!ringRadii.has(ringKey)) {
+        addCurvedRingLane(draft, valid, roadRadius, hashString(`${v.id}:${generation}:arc:${cluster.id}`), clusterAngle);
+        ringRadii.add(ringKey);
+      }
+    });
+    const clusterCountByKind = { house: 0, rice: 0, wood: 0 };
+    for (const cluster of clusters) {
+      const index = clusterCountByKind[cluster.kind]++;
+      const work = cluster.kind !== 'house';
+      const ringLayer = Math.floor(index / (work ? 7 : 9));
+      const radius = work
+        ? ringRadius + 2.2 + ringLayer * 3.1
+        : Math.max(2.8, ringRadius - 1.7 - ringLayer * 2.3);
+      const angle = phase + index * 2.399963229728653 + (noise(index, cluster.tiles, hashString(v.id)) - .5) * .84;
+      const anchor = [v.x + Math.cos(angle) * radius, v.z + Math.sin(angle) * radius];
+      const placedMembers = [];
+      for (const building of cluster.buildings) {
+        const pos = allocate(draft, building.kind, building.w, building.d, valid, { radius, angle, anchor, members: placedMembers });
+        if (!pos) return null;
+        const placed = { ...building, ...pos };
+        draft.buildings.push(placed);
+        placedMembers.push(placed);
+      }
+      draft.layout.clusters.push({ id: cluster.id, kind: cluster.kind, tiles: cluster.tiles, buildingIds: cluster.buildings.map(b => b.id), center: anchor, radius, angle });
     }
-    // Make the entrance segment the main route; the smaller branches remain lanes.
-    if (draft.layout.streets.length > 1) draft.layout.streets[1].kind = 'main';
+    // Recompute deterministic access paths after reserving the circular lane.
+    // Existing access branches are generated by placement; the ring segment links these to the center.
     return draft;
   }
 
