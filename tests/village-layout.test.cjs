@@ -66,13 +66,13 @@ function assertStreetNetwork(v) {
     }
   }
   assert.equal(seen.size, cells.size, 'all village roads connect back to the plaza');
-  for (const b of v.buildings) {
+  for (const cluster of v.layout.clusters) {
     let served = false;
-    for (let x = b.x - 1; x <= b.x + b.w && !served; x++) for (let z = b.z - 1; z <= b.z + b.d && !served; z++) {
-      if (x >= b.x && x < b.x + b.w && z >= b.z && z < b.z + b.d) continue;
+    for (let x = cluster.x - 1; x <= cluster.x + cluster.w && !served; x++) for (let z = cluster.z - 1; z <= cluster.z + cluster.d && !served; z++) {
+      if (x >= cluster.x && x < cluster.x + cluster.w && z >= cluster.z && z < cluster.z + cluster.d) continue;
       if (cells.has(`${x},${z}`)) served = true;
     }
-    assert.ok(served, `building ${b.id} has a nearby road or shared courtyard access`);
+    assert.ok(served, `cluster ${cluster.id} has a nearby road or shared courtyard access`);
   }
 }
 
@@ -95,12 +95,30 @@ test('migration preserves economic state and becomes stable', () => {
     assert.ok(v.layout.streets.some(road => road.kind === 'ring'), 'layout has a curved lane between inner homes and outer work');
     assert.equal(v.layout.clusters.reduce((n, c) => n + c.buildingIds.length, 0), v.buildings.length, 'every building belongs to a small cluster');
     assert.ok(v.layout.clusters.every(c => c.tiles <= 4), 'ordinary clusters target four tiles or fewer');
+    assert.ok(v.layout.clusters.every(c => c.grid && c.w === 2 && c.d === 2), 'small buildings are packed into true 2×2 footprints');
     const meanRadius = kind => {
       const items = v.buildings.filter(b => b.kind === kind);
       return items.reduce((n, b) => n + Math.hypot(b.x + b.w / 2 - v.x, b.z + b.d / 2 - v.z), 0) / items.length;
     };
     assert.ok(meanRadius('house') < meanRadius(role === 'rice' ? 'rice' : 'wood'), 'homes sit inward of the production ring');
   }
+});
+
+test('four 1×1 buildings of one kind occupy one neat 2×2 parcel', () => {
+  const v = village('rice', 'square-pack'), valid = () => true;
+  assert.ok(layout.migrate(v, valid));
+  for (let i = 0; i < 5; i++) add(v, 'house', 1, 1, valid);
+  assert.ok(layout.reorganize(v, valid));
+  const cluster = v.layout.clusters.find(c => c.kind === 'house' && c.tiles === 4);
+  assert.ok(cluster);
+  assert.equal(cluster.w, 2);
+  assert.equal(cluster.d, 2);
+  const members = v.buildings.filter(b => cluster.buildingIds.includes(b.id));
+  assert.equal(new Set(members.map(b => b.rotation)).size, 1, 'the four tile assets align as one visual pack');
+  assert.deepEqual(members.map(b => [b.x, b.z]).sort((a, b) => a[0] - b[0] || a[1] - b[1]),
+    [[cluster.x, cluster.z], [cluster.x, cluster.z + 1], [cluster.x + 1, cluster.z], [cluster.x + 1, cluster.z + 1]]);
+  assert.equal(layout.orientedGroups(v).filter(g => g.kind === 'house' && g.w === 2 && g.d === 2).length, 1);
+  check(v);
 });
 
 test('reorganizes after five new buildings, not five tiles, and preserves every building', () => {
@@ -201,7 +219,10 @@ test('terrain seeds never create illegal footprints or disconnected village road
       const kind = i % 2 ? 'house' : 'rice';
       const pos = layout.chooseSite(v, kind, 1, 1, valid);
       if (pos) v.buildings.push({ id: `seed-${seed}-b${i}`, kind, w: 1, d: 1, ...pos });
-      if (layout.isDue(v)) assert.ok(layout.reorganize(v, valid));
+      if (layout.isDue(v)) {
+        const beforeAttempt = JSON.stringify(v);
+        if (!layout.reorganize(v, valid)) assert.equal(JSON.stringify(v), beforeAttempt, 'an obstructed terrain seed leaves the current save intact');
+      }
     }
     check(v);
     assertStreetNetwork(v);

@@ -2,7 +2,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 9;
+  const VERSION = 10;
   const REORGANIZE_EVERY = 5;
   const MERGE_SIZES = {
     house: [[4, 6], [4, 4], [2, 3], [2, 2]],
@@ -57,12 +57,13 @@
     return Math.max(dx, dz) + (Math.SQRT2 - 1) * Math.min(dx, dz);
   }
 
-  function pathToRoad(start, foot, buildings, roadCells, valid, seed, radius) {
+  function pathToRoad(start, foot, buildings, roadCells, valid, seed, radius, keepouts = []) {
     const cx = Math.floor(foot.x + foot.w / 2), cz = Math.floor(foot.z + foot.d / 2);
     const blocked = (x, z) => {
       if (x < cx - radius || x > cx + radius || z < cz - radius || z > cz + radius) return true;
       if (x >= foot.x && x < foot.x + foot.w && z >= foot.z && z < foot.z + foot.d) return true;
       if (buildings.some(b => x >= b.x && x < b.x + b.w && z >= b.z && z < b.z + b.d)) return true;
+      if (keepouts.some(b => x >= b.x && x < b.x + b.w && z >= b.z && z < b.z + b.d)) return true;
       return !valid(x, z, 1, 1, true);
     };
     if (blocked(start[0], start[1])) return null;
@@ -165,7 +166,7 @@
     candidates.sort((a, b) => a.score - b.score);
 
     // Evaluate the best spatial candidates with a route to the existing shared lane network.
-    for (const candidate of candidates.slice(0, 48)) {
+    for (const candidate of candidates.slice(0, 16)) {
       const targets = accessTargets(candidate).sort((a, b) =>
         Math.min(...[...roadCells].map(k => { const [x, z] = k.split(',').map(Number); return octile(a.cell[0], a.cell[1], [x, z]); })) -
         Math.min(...[...roadCells].map(k => { const [x, z] = k.split(',').map(Number); return octile(b.cell[0], b.cell[1], [x, z]); }))
@@ -214,6 +215,92 @@
     return clusters;
   }
 
+  function packCluster(cluster) {
+    if (cluster.tiles > 4) {
+      cluster.w = Math.max(...cluster.buildings.map(b => b.w));
+      cluster.d = Math.max(...cluster.buildings.map(b => b.d));
+      cluster.parts = cluster.buildings.map(b => ({ building: b, x: 0, z: 0 }));
+      cluster.grid = false;
+      return cluster;
+    }
+    const parts = [], occupied = new Set();
+    const members = [...cluster.buildings].sort((a, b) => b.w * b.d - a.w * a.d || String(a.id).localeCompare(String(b.id)));
+    function place(index) {
+      if (index >= members.length) return true;
+      const building = members[index];
+      if (building.w > 2 || building.d > 2) return false;
+      for (let z = 0; z <= 2 - building.d; z++) for (let x = 0; x <= 2 - building.w; x++) {
+        let clear = true;
+        for (let tx = x; tx < x + building.w && clear; tx++) for (let tz = z; tz < z + building.d; tz++) {
+          if (occupied.has(key(tx, tz))) { clear = false; break; }
+        }
+        if (!clear) continue;
+        for (let tx = x; tx < x + building.w; tx++) for (let tz = z; tz < z + building.d; tz++) occupied.add(key(tx, tz));
+        parts.push({ building, x, z });
+        if (place(index + 1)) return true;
+        parts.pop();
+        for (let tx = x; tx < x + building.w; tx++) for (let tz = z; tz < z + building.d; tz++) occupied.delete(key(tx, tz));
+      }
+      return false;
+    }
+    if (!place(0)) {
+      // Unexpected footprints stay intact as a dedicated parcel instead of being distorted.
+      cluster.w = Math.max(...cluster.buildings.map(b => b.w));
+      cluster.d = Math.max(...cluster.buildings.map(b => b.d));
+      cluster.parts = cluster.buildings.map(b => ({ building: b, x: 0, z: 0 }));
+      cluster.grid = false;
+      return cluster;
+    }
+    cluster.w = 2; cluster.d = 2; cluster.parts = parts; cluster.grid = true;
+    return cluster;
+  }
+
+  function angularSlot(index) {
+    const sequence = [0, 1, -1, 2, -2, 3, -3, 4];
+    return sequence[index % sequence.length];
+  }
+
+  function allocateCluster(v, cluster, valid, target) {
+    const layout = v.layout, cx = Math.floor(v.x), cz = Math.floor(v.z), buildings = v.buildings;
+    const seed = hashString(`${v.id}:${layout.generation || 0}:${cluster.id}`);
+    const search = Math.min(25, target.radius + 4 + Math.max(cluster.w, cluster.d) * .25);
+    const candidates = [];
+    for (let x = Math.ceil(cx - search); x <= Math.floor(cx + search - cluster.w + 1); x++) {
+      for (let z = Math.ceil(cz - search); z <= Math.floor(cz + search - cluster.d + 1); z++) {
+        const candidate = { x, z, w: cluster.w, d: cluster.d };
+        const mx = x + cluster.w / 2, mz = z + cluster.d / 2;
+        const dx = mx - v.x, dz = mz - v.z, dist = Math.hypot(dx, dz), angle = Math.atan2(dz, dx);
+        if (dist < Math.max(1.8, target.radius - 3.6) || dist > search - Math.max(cluster.w, cluster.d) * .25) continue;
+        if (buildings.some(b => overlap(candidate, b)) || layout.blocks.some(b => overlap(candidate, b))) continue;
+        if (layout.streets.some(road => road.path.some(([rx, rz]) => rx >= x - 1 && rx < x + cluster.w + 1 && rz >= z - 1 && rz < z + cluster.d + 1))) continue;
+        if (!valid(x, z, cluster.w, cluster.d, false)) continue;
+        let angleDelta = Math.abs(angle - target.angle) % (Math.PI * 2);
+        angleDelta = Math.min(angleDelta, Math.PI * 2 - angleDelta);
+        const radial = Math.abs(dist - target.radius);
+        const anchorDistance = Math.hypot(mx - target.anchor[0], mz - target.anchor[1]);
+        const irregular = noise(x, z, seed) * .42;
+        const score = anchorDistance * 1.05 + radial * .42 + angleDelta * target.radius * .52 + irregular;
+        candidates.push({ ...candidate, score });
+      }
+    }
+    candidates.sort((a, b) => a.score - b.score);
+    const roadCells = new Set(layout.streets.flatMap(road => road.path.map(([x, z]) => key(x, z))));
+    for (const candidate of candidates.slice(0, 48)) {
+      let best = null;
+      const accessOptions = accessTargets(candidate).sort((a, b) =>
+        Math.min(...[...roadCells].map(cell => { const [x, z] = cell.split(',').map(Number); return octile(a.cell[0], a.cell[1], [x, z]); })) -
+        Math.min(...[...roadCells].map(cell => { const [x, z] = cell.split(',').map(Number); return octile(b.cell[0], b.cell[1], [x, z]); }))
+      );
+      for (const access of accessOptions.slice(0, 2)) {
+        const path = pathToRoad(access.cell, candidate, buildings, roadCells, valid, seed,
+          Math.max(18, Math.ceil(target.radius + 8)));
+        if (path && (!best || path.length < best.path.length)) best = { ...access, path };
+      }
+      if (best) return { ...candidate, access: best };
+    }
+    return null;
+  }
+
   function addCurvedRingLane(v, valid, radius, seed, angle) {
     const cx = Math.floor(v.x), cz = Math.floor(v.z), layout = v.layout;
     const buildings = v.buildings, span = 1.12, samples = Math.max(16, Math.ceil(radius * span * 8));
@@ -227,7 +314,7 @@
       if (cells.at(-1)?.key !== cell) cells.push({ key: cell, point: [x, z] });
     }
     if (cells.length > 1 && cells[0].key === cells.at(-1).key) cells.pop();
-    const clear = ({ point: [x, z] }) => !buildings.some(b => x >= b.x && x < b.x + b.w && z >= b.z && z < b.z + b.d) && valid(x, z, 1, 1, true);
+    const clear = ({ point: [x, z] }) => !buildings.some(b => x >= b.x && x < b.x + b.w && z >= b.z && z < b.z + b.d) && !layout.blocks.some(b => x >= b.x && x < b.x + b.w && z >= b.z && z < b.z + b.d) && valid(x, z, 1, 1, true);
     // Keep the longest clear curved segment; it remains connected to the central plaza.
     let best = [], run = [];
     for (const cell of [...cells, { key: 'break', point: [NaN, NaN] }]) {
@@ -240,7 +327,7 @@
     if (best.length < 4) return;
     const centerRoads = new Set(layout.streets.flatMap(road => road.path.map(([x, z]) => key(x, z))));
     const start = best[0];
-    const join = pathToRoad(start, { x: cx, z: cz, w: 0, d: 0 }, buildings, centerRoads, valid, seed, Math.ceil(radius + 7));
+    const join = pathToRoad(start, { x: cx, z: cz, w: 0, d: 0 }, buildings, centerRoads, valid, seed, Math.ceil(radius + 7), layout.blocks);
     if (!join) return;
     layout.streets.push({ kind: 'main', key: join.map(([x, z]) => key(x, z)).join(';'), path: join });
     layout.streets.push({ kind: 'ring', key: best.map(([x, z]) => key(x, z)).join(';'), path: best });
@@ -259,43 +346,51 @@
     const totalArea = v.buildings.reduce((sum, b) => sum + b.w * b.d, 0);
     const clusters = buildingClusters(v.buildings, v.id);
     const phase = (hashString(`${v.id}:city-ring`) / 4294967295) * Math.PI * 2;
-    const ringRadius = Math.min(12, Math.max(4.6, 4.6 + Math.sqrt(totalArea) * .25));
-    const ringRadii = new Set();
-    clusters.filter(cluster => cluster.kind !== 'house').forEach(cluster => {
-      const index = cluster.kind === 'rice'
-        ? clusters.filter(c => c.kind === 'rice').indexOf(cluster)
-        : clusters.filter(c => c.kind === 'wood').indexOf(cluster);
-      const ringLayer = Math.floor(index / 7);
-      const roadRadius = ringRadius + ringLayer * 3.1;
-      const clusterAngle = phase + index * 2.399963229728653 + (noise(index, cluster.tiles, hashString(v.id)) - .5) * .84;
-      const ringKey = `${roadRadius.toFixed(2)}:${Math.round(clusterAngle * 5)}`;
-      if (!ringRadii.has(ringKey)) {
-        addCurvedRingLane(draft, valid, roadRadius, hashString(`${v.id}:${generation}:arc:${cluster.id}`), clusterAngle);
-        ringRadii.add(ringKey);
-      }
-    });
-    const clusterCountByKind = { house: 0, rice: 0, wood: 0 };
+    const homeClusters = clusters.filter(cluster => cluster.kind === 'house');
+    const homeRingCount = Math.max(1, Math.ceil(homeClusters.length / 8));
+    const counters = { house: 0, rice: 0, wood: 0 };
+    const placedClusters = [];
     for (const cluster of clusters) {
-      const index = clusterCountByKind[cluster.kind]++;
-      const work = cluster.kind !== 'house';
-      const ringLayer = Math.floor(index / (work ? 7 : 9));
-      const radius = work
-        ? ringRadius + 2.2 + ringLayer * 3.1
-        : Math.max(2.8, ringRadius - 1.7 - ringLayer * 2.3);
-      const angle = phase + index * 2.399963229728653 + (noise(index, cluster.tiles, hashString(v.id)) - .5) * .84;
+      packCluster(cluster);
+      const index = counters[cluster.kind]++;
+      const ringLayer = Math.floor(index / 8);
+      const localIndex = index % 8;
+      const sector = angularSlot(localIndex);
+      const typeOffset = cluster.kind === 'house' ? -.08 : .08;
+      const angle = phase + sector * .78 + typeOffset + (noise(index, cluster.tiles, hashString(v.id + cluster.kind)) - .5) * .18;
+      const radius = cluster.kind === 'house'
+        ? 3.15 + ringLayer * 3.35
+        : 5.65 + (homeRingCount - 1) * 3.35 + ringLayer * 3.45;
       const anchor = [v.x + Math.cos(angle) * radius, v.z + Math.sin(angle) * radius];
-      const placedMembers = [];
-      for (const building of cluster.buildings) {
-        const pos = allocate(draft, building.kind, building.w, building.d, valid, { radius, angle, anchor, members: placedMembers });
-        if (!pos) return null;
-        const placed = { ...building, ...pos };
-        draft.buildings.push(placed);
-        placedMembers.push(placed);
+      const positioned = allocateCluster(draft, cluster, valid, { radius, angle, anchor });
+      if (!positioned) return null;
+      cluster.x = positioned.x; cluster.z = positioned.z; cluster.radius = radius; cluster.angle = angle; cluster.ring = ringLayer;
+      for (const part of cluster.parts) {
+        const building = { ...part.building, x: cluster.x + part.x, z: cluster.z + part.z, rotation: 0 };
+        part.building = building;
+        draft.buildings.push(building);
       }
-      draft.layout.clusters.push({ id: cluster.id, kind: cluster.kind, tiles: cluster.tiles, buildingIds: cluster.buildings.map(b => b.id), center: anchor, radius, angle });
+      const block = { id: cluster.id, kind: cluster.kind, x: cluster.x, z: cluster.z, w: cluster.w, d: cluster.d, tiles: cluster.tiles };
+      // This footprint is both a visual pack and a placement keepout. The
+      // economic buildings remain separate entries in draft.buildings.
+      draft.layout.blocks.push(block);
+      for (const part of cluster.parts) part.building.rotation = positioned.access.rotation;
+      if (positioned.access.path.length > 1) draft.layout.streets.push({
+        kind: 'lane', key: positioned.access.path.map(([x, z]) => key(x, z)).join(';'), path: positioned.access.path
+      });
+      cluster.center = [cluster.x + cluster.w / 2, cluster.z + cluster.d / 2];
+      draft.layout.clusters.push({ id: cluster.id, kind: cluster.kind, tiles: cluster.tiles, buildingIds: cluster.parts.map(p => p.building.id), x: cluster.x, z: cluster.z, w: cluster.w, d: cluster.d, center: cluster.center, radius, angle, ring: ringLayer, grid: cluster.grid });
+      placedClusters.push(cluster);
     }
-    // Recompute deterministic access paths after reserving the circular lane.
-    // Existing access branches are generated by placement; the ring segment links these to the center.
+
+    const workClusters = placedClusters.filter(cluster => cluster.kind !== 'house');
+    if (workClusters.length) {
+      const outerRadius = Math.max(...workClusters.map(cluster => cluster.radius));
+      const innerRadius = placedClusters.filter(cluster => cluster.kind === 'house').reduce((m, cluster) => Math.max(m, cluster.radius), 0);
+      const laneRadius = Math.max(4.4, (outerRadius + (innerRadius || 2.6)) / 2);
+      const laneAngle = workClusters[0].angle;
+      addCurvedRingLane(draft, valid, laneRadius, hashString(`${v.id}:${generation}:circular-lane`), laneAngle);
+    }
     return draft;
   }
 
