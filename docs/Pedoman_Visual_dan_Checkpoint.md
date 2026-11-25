@@ -141,5 +141,5 @@ CityRT dan gambar referensi pengguna menjadi **acuan rasa visual**: dunia sepert
 - Panel turut memperkirakan jumlah tile produksi 1×1 tambahan untuk kapasitas kerja seluruh penduduk: farm untuk desa pangan, rumah kayu untuk desa kayu.
 - Fitur hanya informasi. Tidak mengubah ekonomi, populasi, stok, biaya, produksi, kapasitas, distribusi, pertumbuhan, atau tata letak. Tidak membuat simulasi villager individual.
 - Validasi: `node --check dist/game.js` lulus saat persiapan publikasi; Site versi 26 berhasil dideploy dan halaman dimuat. Asisten belum memverifikasi panel setelah memilih desa; pengguna diminta mencoba hasilnya.
-- Sumber Site versi 26: `ff16803eac609a7a74a052244d068bd5dbc19937`, deployment berhasil `appgdep_6b06c5acd8ac8191941247af55db0c60`. GitHub checkpoint akan dicatat setelah commit.
+- Sumber Site versi 26: `ff16803eac609a7a74a052244d068bd5dbc19937`, deployment berhasil `appgdep_6b06c5acd8ac8191941247af55db0c60`. GitHub code checkpoint: [`6a0add0dfe7290cafbbfedf610555785a1c7c839`](https://github.com/ardhifacebook-beep/Majapahit/commit/6a0add0dfe7290cafbbfedf610555785a1c7c839).
 - [Coba Tanah Majapahit](https://majapahit-terrain-ahs.vast-vine-9923.chatgpt.site).
