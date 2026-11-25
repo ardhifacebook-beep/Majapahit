@@ -1,8 +1,8 @@
 # Game AHS — Pedoman Visual dan Fondasi Kode
 
 **Proyek:** County builder 3D berlatar Majapahit, dapat dimainkan di browser  
-**Status:** Acuan pengembangan yang disepakati, checkpoint studi 11 variasi aset Majapahit  
-**Tanggal:** 23 November 2026  
+**Status:** Prototipe playable; layout desa melingkar v10 dan panel informasi tenaga kerja berdasarkan kapasitas produksi  
+**Tanggal:** 25 November 2026  
 **Demo:** [Tanah Majapahit](https://majapahit-terrain-ahs.vast-vine-9923.chatgpt.site)
 
 Dokumen ini mencatat arahan pengguna dan kondisi prototipe saat ini. Jadikan sebagai acuan kerja pada perubahan berikutnya; ubah arahnya jika pengguna memberikan instruksi baru. Ini bukan pendaftaran hak paten atau klaim kepemilikan atas CityRT.
@@ -24,12 +24,12 @@ CityRT dan gambar referensi pengguna menjadi **acuan rasa visual**: dunia sepert
 - Nuansa alam tropis Jawa: pepohonan hijau berkelompok, kanopi lebar, beberapa palem, dan variasi ukuran serta kepadatan hutan. Jangan memenuhi seluruh peta dengan rumput atau foliage 3D kecil.
 - Cahaya dan warna mengarah ke suasana hangat dan nyaman, dengan kedalaman visual yang jelas. Shading dan pencahayaan dapat disempurnakan bertahap sesuai kemampuan implementasi.
 
-### Bangunan pada tahap mendatang
+### Bangunan dan komposisi desa saat ini
 
-- Ambil bahasa visual bersih seperti maket city builder, lalu sesuaikan dengan konteks Majapahit/Jawa.
-- Rencanakan siluet dan detail arsitektur yang tetap terbaca dari sudut kamera permainan. Bata merah, kayu, dan warna tanah dapat menjadi eksplorasi awal, dengan desain spesifik menunggu arahan pengguna.
-- Jangan menambahkan desain bangunan, mekanik, ukuran atau sistem konstruksi sebagai keputusan final tanpa arahan pengguna.
-- Bangunan modular dan mengikuti jalan melengkung adalah kemungkinan eksplorasi, belum merupakan fitur yang disetujui.
+- Bahasa arsitektur Majapahit tetap memakai aset yang telah dibuat: bentuk atap, kayu, bata merah, pagar, sumur, sawah dan vegetasi tropis.
+- Layout desa melingkar v10 mengelompokkan bangunan kecil sejenis dalam blok rapat 2×2. Rumah berada lebih dekat ke pusat, farm atau rumah kayu mengitari bagian luar; radius bertambah bertahap ketika kelompok padat. Layout dan jalan lokal dibuat ulang setiap lima bangunan tambahan, tanpa mengurangi jumlah atau luas bangunan ekonomi.
+- Panel detail desa menampilkan jumlah penduduk yang bekerja penuh dan idle menurut kapasitas bangunan produksi. Ini ringkasan kapasitas, bukan simulasi villager individual atau assignment pekerja.
+- Gunakan aset orisinal; gambar referensi menunjukkan rasa komposisi, bukan algoritma internal atau aset yang disalin.
 
 ## 3. Fondasi teknis prototipe saat ini
 
@@ -41,27 +41,25 @@ CityRT dan gambar referensi pengguna menjadi **acuan rasa visual**: dunia sepert
 | Renderer | Geometri 3D dirender dengan WebGL bila tersedia; ada renderer cadangan berbasis Canvas 2D yang memproyeksikan geometri 3D bila WebGL tidak tersedia. |
 | Terrain | Kontur, warna rumput, alur sungai dan tepian dihasilkan secara prosedural. |
 | Vegetasi | Pohon berkanopi dan palem dibentuk dari geometri prosedural; lokasi bervariasi berdasarkan seed. |
-| Kamera | Putar dengan drag, zoom dengan scroll, geser dengan Shift + drag, dan reset dengan tombol. |
-| Tile | Klik menampilkan perkiraan lokasi tile dan klasifikasi darat/sungai; pemilihan saat ini memakai pendekatan bidang datar sehingga belum presisi untuk kontur atau objek yang lebih kompleks. |
+| Kamera | Desktop: drag kiri untuk geser, drag kanan untuk putar/miring, scroll untuk zoom. Sentuh: satu jari untuk geser; dua jari untuk zoom dan putar/miring. Arah geser vertikal dibalik, arah horizontal dipertahankan. |
+| Gameplay | Settlement sawah dan kayu, jalan antardesa, stok, produksi/konsumsi, distribusi, pertumbuhan penduduk, pembangunan manual, tata ulang layout tiap lima bangunan, serta ringkasan tenaga kerja tersedia sebagai prototipe. |
 | Variasi dunia | Tombol menghasilkan peta berdasarkan seed, termasuk bentuk air, bukit, hutan dan vegetasi; input seed memungkinkan membuka peta yang sama pada versi generator yang sama. |
 
-**Batas saat ini:** Ini prototipe visual dengan model bangunan di area studi; belum mencakup mekanik penempatan atau upgrade bangunan, ekonomi, penduduk, jalan, maupun penyimpanan permainan. Renderer cadangan dapat lebih lambat, terutama saat geometri bertambah. Tidak ada klaim performa atau kompatibilitas pada semua perangkat tanpa pengujian.
+**Batas saat ini:** Panel tenaga kerja hanya menghitung penduduk yang didukung kapasitas produksi dan sisa yang idle; belum ada simulasi atau penugasan villager individual. Pajak, pasar, perdagangan antardaerah, dan progresi kerajaan belum diimplementasikan. Renderer cadangan dapat lebih lambat, terutama saat geometri bertambah. Kompatibilitas seluruh perangkat belum diverifikasi.
 
 ## 4. Susunan kode
 
-> Kode prototipe checkpoint telah disalin ke repository GitHub ini. Commit berawalan `98a6281` di bawah merujuk ke repository sumber prototipe terpisah, bukan riwayat GitHub ini.
-
 - `dist/index.html` — struktur halaman, kanvas dan kontrol.
-- `dist/style.css` — tampilan antarmuka dan penyesuaian ukuran layar.
-- `dist/game.js` — pembuatan geometri terrain dan pepohonan, pewarnaan, renderer, kamera dan interaksi prototipe.
-- `dist/map.js` — generator peta berbasis seed, tipe terrain dan bentuk bentang alam.
-- `dist/assets.js` — model 3D prosedural untuk studi aset rumah, sawah dan tempat kerja kayu.
-- `ART_DIRECTION.md` — catatan singkat arahan seni di dalam proyek.
-- Konfigurasi hosting milik proyek prototipe terpisah dan tidak disalin ke repository ini.
+- `dist/style.css` — tampilan antarmuka responsif, termasuk panel tenaga kerja.
+- `dist/game.js` — renderer, terrain, kamera, interaksi, settlement, jalan dan antarmuka gameplay.
+- `dist/assets.js` — bentuk dan variasi aset bangunan Majapahit.
+- `dist/map.js` — generator terrain dan seed peta.
+- `dist/simulation.js` — stok, produksi, konsumsi, kapasitas dan distribusi.
+- `dist/village-layout.js` — penempatan tile, tata ulang desa, jalan lokal, migrasi dan penggabungan visual.
+- `tests/village-layout.test.cjs` — tes layout, tabrakan, jalan dan migrasi.
+- `ART_DIRECTION.md` — catatan arahan seni; `.openai/hosting.json` — konfigurasi hosting.
 
-Kode prototipe saat ini menggunakan `game.js`, `map.js` dan `assets.js`. Saat kompleksitas bertambah, pisahkan generator terrain, aset, renderer, kamera, interaksi dan state secara bertahap tanpa mengubah arah visual atau mekanik yang disetujui. Simpan grid logis terpisah dari tampilan permukaan sehingga tile tidak harus terlihat sebagai kotak.
-
-**Titik acuan sumber prototipe saat ini:** commit `d64649f9cee37e5c738fa3743e8e379ad3104ceb`, studi aset dengan detail bertahap. Versi generator peta sebelumnya: `0c1871cc492c88738a9482e84f5760a1fc543a2c`. Versi peta 125 × 125 sebelumnya: `98a6281f4d2d1a00be478102dab1fb8478dbfedb`. Titik acuan sebelumnya: `1b121b7a14ab1c8153e2007ed6a79fdfa3a1c9b7` untuk style tropis awal. Commit tersebut adalah identitas versi di repository asal. Kode checkpoint juga tersedia di repository GitHub ini.
+**Titik acuan sebelum checkpoint tenaga kerja:** GitHub `main` `3f9f09baf554561e30e7aa2f76008441721a8deb`; Site versi 25, sumber `a082b055eee87f698573b21765b370761fd4225e`. Checkpoint terbaru akan menautkan kedua sumber setelah sinkronisasi selesai.
 
 ## 5. Aturan ketika melanjutkan pengembangan
 
@@ -133,3 +131,15 @@ Kode prototipe saat ini menggunakan `game.js`, `map.js` dan `assets.js`. Saat ko
 - Skala acuan tetap 10 × 10 meter per tile. Proporsi manusia, pohon dan bangunan masih perlu dikalibrasi.
 - Commit sumber prototipe terpisah: `d64649f9cee37e5c738fa3743e8e379ad3104ceb`. Kode dan dokumen checkpoint tersedia bersama pada commit GitHub yang memuat bagian ini.
 - Validasi: sintaks ketiga file JavaScript diperiksa; uji simulasi memuat 11 aset, label dan pemilih. Versi ini belum diperiksa langsung di browser oleh asisten; pengguna telah melihat dan menyukainya.
+
+
+## 11. Checkpoint — Informasi tenaga kerja desa
+
+**Tanggal:** 25 November 2026. Pengguna meminta panel desa menampilkan villager yang bekerja dan idle karena kapasitas produksi belum mencukupi.
+
+- Detail desa menunjukkan jumlah **Bekerja penuh** dan **Idle**. Perhitungan menggunakan populasi, kapasitas produksi bangunan spesialisasi, dan aturan produksi per penduduk yang sudah berlaku; jumlah pekerja penuh dibulatkan ke bawah.
+- Panel turut memperkirakan jumlah tile produksi 1×1 tambahan untuk kapasitas kerja seluruh penduduk: farm untuk desa pangan, rumah kayu untuk desa kayu.
+- Fitur hanya informasi. Tidak mengubah ekonomi, populasi, stok, biaya, produksi, kapasitas, distribusi, pertumbuhan, atau tata letak. Tidak membuat simulasi villager individual.
+- Validasi: `node --check dist/game.js` lulus saat persiapan publikasi; Site versi 26 berhasil dideploy dan halaman dimuat. Asisten belum memverifikasi panel setelah memilih desa; pengguna diminta mencoba hasilnya.
+- Sumber Site versi 26: `ff16803eac609a7a74a052244d068bd5dbc19937`, deployment berhasil `appgdep_6b06c5acd8ac8191941247af55db0c60`. GitHub checkpoint akan dicatat setelah commit.
+- [Coba Tanah Majapahit](https://majapahit-terrain-ahs.vast-vine-9923.chatgpt.site).
