@@ -428,7 +428,9 @@
   function orientedGroups(v) {
     return visualGroups(v.buildings).map(item => {
       const members = item.buildingIds.map(id => v.buildings.find(b => String(b.id) === id)).filter(Boolean);
-      return { ...item, rotation: members[0]?.rotation || 0, wealthLevel: members.some(b => Number(b.upgradeLevel) > 0) ? 1 : 0 };
+      const wealthLevel = members.some(b => Number(b.upgradeLevel) > 0) ? 1 : 0;
+      // Paid groups of four 1×1 houses keep their 2×2 visual footprint.
+      return { ...item, rotation: members[0]?.rotation || 0, wealthLevel };
     });
   }
 
@@ -444,10 +446,12 @@
             const members = new Set(); let complete = true;
             for (let tx = x; tx < x + w && complete; tx++) for (let tz = z; tz < z + d; tz++) {
               const member = occupancy.get(key(tx, tz));
-              if (!member || member.kind !== building.kind || member.rotation !== building.rotation || !remaining.has(member)) { complete = false; break; }
+              if (!member || member.kind !== building.kind || (member.rotation !== building.rotation && !(building.kind === 'house' && Number(member.upgradeLevel) > 0 && Number(building.upgradeLevel) > 0)) || !remaining.has(member)) { complete = false; break; }
               members.add(member);
             }
             if (!complete || members.size < 2) continue;
+            // Small houses stay as separate 1×1 homes until the player pays to upgrade their group.
+            if (building.kind === 'house' && ![...members].every(member => Number(member.upgradeLevel) > 0)) continue;
             let area = 0;
             for (const member of members) {
               if (member.x < x || member.z < z || member.x + member.w > x + w || member.z + member.d > z + d) { complete = false; break; }
