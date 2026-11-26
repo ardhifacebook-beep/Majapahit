@@ -21,7 +21,7 @@ function drawRoads(){const edges=new Map(),color=[.68,.58,.41];const paths=[...s
  for(const {a,b,width}of edges.values()){const dx=b[0]-a[0],dz=b[1]-a[1],l=Math.hypot(dx,dz)||1,half=width||.22,px=-dz/l*half,pz=dx/l*half,steps=Math.max(1,Math.ceil(l*4));const point=(t,side)=>{const x=a[0]+.5+dx*t+px*side,z=a[1]+.5+dz*t+pz*side;return [x,roadSurface(x,z),z]};for(let i=0;i<steps;i++){const p=point(i/steps,1),q=point(i/steps,-1),r=point((i+1)/steps,-1),t=point((i+1)/steps,1);tri(p,q,r,color);tri(p,r,t,color)}}
  const nodes=new Map();for(const {a,b}of edges.values()){nodes.set(a.join(','),a);nodes.set(b.join(','),b)}for(const [x,z]of nodes.values()){const point=(dx,dz)=>[x+.5+dx,roadSurface(x+.5+dx,z+.5+dz),z+.5+dz];tri(point(-.22,-.22),point(.22,-.22),point(.22,.22),color);tri(point(-.22,-.22),point(.22,.22),point(-.22,.22),color)}
 }
-function drawSettlements(){for(const v of state.villages){for(const item of VillageLayout.orientedGroups(v)){const transform=p=>{const angle=item.rotation||0,dx=p[0]-item.x,dz=p[2]-item.z,c=Math.cos(angle),sn=Math.sin(angle);return [item.x+c*dx+sn*dz,p[1],item.z-sn*dx+c*dz]};const house2x2=item.kind==='house'&&item.wealthLevel?AssetStudy.items.find(asset=>asset.kind==='house'&&asset.w===2&&asset.d===2):null;const renderItem=house2x2?{...house2x2,x:item.x,z:item.z,rotation:item.rotation,buildingIds:item.buildingIds}:item;AssetStudy.build((a,b,c,col,shade)=>tri(transform(a),transform(b),transform(c),col,shade),(a,b,c,d,col)=>quad(transform(a),transform(b),transform(c),transform(d),col),[renderItem])}AssetStudy.build(tri,quad,[{kind:'commons',x:v.x,z:v.z,w:1.6,d:1.6}])}}
+function drawSettlements(){for(const v of state.villages){for(const item of VillageLayout.orientedGroups(v)){const transform=p=>{const angle=item.rotation||0,dx=p[0]-item.x,dz=p[2]-item.z,c=Math.cos(angle),sn=Math.sin(angle);return [item.x+c*dx+sn*dz,p[1],item.z-sn*dx+c*dz]};const houseAsset=item.kind==='house'&&item.wealthLevel?AssetStudy.items.find(asset=>asset.kind==='house'&&asset.w===(item.assetW||2)&&asset.d===(item.assetD||2)):null;const renderItem=houseAsset?{...houseAsset,x:item.x,z:item.z,rotation:item.rotation,buildingIds:item.buildingIds}:item;AssetStudy.build((a,b,c,col,shade)=>tri(transform(a),transform(b),transform(c),col,shade),(a,b,c,d,col)=>quad(transform(a),transform(b),transform(c),transform(d),col),[renderItem])}AssetStudy.build(tri,quad,[{kind:'commons',x:v.x,z:v.z,w:1.6,d:1.6}])}}
 function findVillage(x,z){let best=null,dis=Infinity;for(const v of state.villages){let d=Math.hypot(v.x-(x+.5),v.z-(z+.5));if((d<4||(v.buildings||[]).some(b=>x>=b.x&&x<b.x+b.w&&z>=b.z&&z<b.z+b.d))&&d<dis){best=v;dis=d}}return best}
 function overlaps(a,b){return a.x<b.x+b.w&&a.x+a.w>b.x&&a.z<b.z+b.d&&a.z+a.d>b.z}
 function validBuildingSite(v,kind,x,z,w,d){let candidate={x,z,w,d},cx=x+w/2,cz=z+d/2;if(x< -61||z< -61||x+w>62||z+d>62)return false;for(const other of state.villages){VillageSimulation.ensureVillage(other);if(other.id!==v.id&&Math.hypot(cx-other.x,cz-other.z)<8)return false;for(const b of other.buildings)if(overlaps(candidate,b))return false}for(const road of state.roads)for(const [rx,rz] of road.path||[])if(rx>=x&&rx<x+w&&rz>=z&&rz<z+d)return false;for(let dx=0;dx<w;dx++)for(let dz=0;dz<d;dz++){const type=map.typeAt(x+dx+.5,z+dz+.5);if(type===MapGenerator.WATER||type===MapGenerator.HILL)return false}return true}
@@ -29,17 +29,46 @@ function buildingSite(v,kind,w,d){return VillageLayout.chooseSite(v,kind,w,d,(x,
 function buildSelected(){const v=state.villages.find(v=>v.id===chosen);if(!v){msg('Pilih desa terlebih dahulu lewat Periksa desa.');return}const [kind,w,d]=document.querySelector('#buildSpec').value.split(':');if(kind==='rice'&&v.role!=='rice'||kind==='wood'&&v.role!=='wood'){msg(`Desa ${v.role==='rice'?'pangan hanya dapat menambah farm':'kayu hanya dapat menambah rumah kayu'}; rumah penduduk bisa dibangun di keduanya.`);return}const width=Number(w),depth=Number(d),size=width*depth,cost=VillageSimulation.RULES.buildCostPerTile[kind]*size;if(v.wood<cost){msg(`Kayu belum cukup. Bangunan ini membutuhkan ${cost} kayu.`);return}const site=buildingSite(v,kind,width,depth);if(!site){msg('Tidak ada ruang yang sesuai di sekitar desa.');return}v.wood-=cost;v.buildings.push({id:`${v.id}-b${Date.now()}`,kind,x:site.x,z:site.z,w:width,d:depth,rotation:site.rotation});const due=VillageLayout.isDue(v);let reorganized=false;if(due){try{if(!localStorage.getItem(key+'-before-circular-v10'))localStorage.setItem(key+'-before-circular-v10',JSON.stringify(state))}catch(e){}reorganized=VillageLayout.reorganize(v,(x,z,w,d,street)=>parcelValid(v,x,z,w,d,street))}save();generate();update();const built=`${kind==='house'?'Rumah':kind==='rice'?'Farm':'Rumah kayu'} ${width}×${depth} dibangun dengan biaya ${cost} kayu.`;msg(reorganized?`${built} Lima bangunan baru terkumpul; susunan desa dan jalannya ditata ulang.`:due?`${built} Penataan ulang belum menemukan susunan yang valid; layout sekarang tetap dipakai.`:built)}
 const HOUSE_UPGRADE_COST={food:10,wood:5};
 let pendingHouseUpgrade=null;
+const HOUSE_UPGRADE_OPTIONS=[
+ {key:'house:2:2',w:2,d:2,label:'Rumah rakyat 2×2'},
+ {key:'house:2:3',w:2,d:3,label:'Rumah rakyat 2×3'},
+ {key:'house:4:4',w:4,d:4,label:'Rumah rakyat 4×4'},
+ {key:'house:4:6',w:4,d:6,label:'Rumah rakyat 4×6'}
+];
+function ensureHouseUpgradeGroupIds(v){
+ const buildings=(v.buildings||[]).filter(item=>item.kind==='house'&&Number(item.upgradeLevel)>0&&(item.upgradeAsset||'house:2:2')==='house:2:2'),occupancy=new Map(),claimed=new Set();let changed=false;
+ for(const home of buildings)for(let x=home.x;x<home.x+home.w;x++)for(let z=home.z;z<home.z+home.d;z++)occupancy.set(`${x},${z}`,home);
+ for(const home of buildings.filter(item=>item.w===1&&item.d===1))for(let x=home.x-1;x<=home.x;x++)for(let z=home.z-1;z<=home.z;z++){
+  const members=new Set();let complete=true;
+  for(let dx=0;dx<2&&complete;dx++)for(let dz=0;dz<2;dz++){
+   const member=occupancy.get(`${x+dx},${z+dz}`);
+   if(!member||member.w!==1||member.d!==1||Number(member.upgradeLevel)!==Number(home.upgradeLevel)||claimed.has(String(member.id))){complete=false;break}
+   members.add(member);
+  }
+  if(!complete||members.size!==4)continue;
+  const ids=[...members].map(item=>String(item.id)).sort(),groupId=`house-upgrade:${ids.join('|')}`;
+  for(const member of members){claimed.add(String(member.id));if(member.upgradeGroupId!==groupId){member.upgradeGroupId=groupId;changed=true}}
+ }
+ for(const home of buildings)if(!home.upgradeGroupId){home.upgradeGroupId=`house-upgrade:${home.id}`;changed=true}
+ if(changed)save();
+}
 function houseUpgradeGroups(v){
+ ensureHouseUpgradeGroupIds(v);
  const buildings=v.buildings||[],candidates=[],add=(group,fromLayout=false)=>{
   if(group.kind!=='house')return;
   const w=Number(group.w)||0,d=Number(group.d)||0,area=Number(group.tiles)||w*d;
   if(w<2||d<2||area<4)return;
   const buildingIds=(group.buildingIds||[]).map(String).filter(id=>id&&id!=='undefined').sort();
-  if(!buildingIds.length||buildingIds.some(id=>{const b=buildings.find(item=>String(item.id)===id);return !b||Number(b.upgradeLevel)>0}))return;
+  const members=buildingIds.map(id=>buildings.find(item=>String(item.id)===id));
+  if(!buildingIds.length||members.some(item=>!item))return;
+  const levels=[...new Set(members.map(item=>Number(item.upgradeLevel)||0))];
+  if(levels.length!==1||levels[0]>1)return;
+  const stage=levels[0];
+  if(stage===1&&(members.length!==4||members.some(item=>item.w!==1||item.d!==1||(item.upgradeAsset||'house:2:2')!=='house:2:2')))return;
   const included=new Set(buildingIds);
   if(candidates.some(existing=>existing.buildingIds.every(id=>included.has(id))||buildingIds.every(id=>existing.buildingIds.includes(id))))return;
   const center=group.center;
-  candidates.push({...group,buildingIds,x:Array.isArray(center)?center[0]:fromLayout?group.x+w/2:group.x,z:Array.isArray(center)?center[1]:fromLayout?group.z+d/2:group.z});
+  candidates.push({...group,buildingIds,stage,x:Array.isArray(center)?center[0]:fromLayout?group.x+w/2:group.x,z:Array.isArray(center)?center[1]:fromLayout?group.z+d/2:group.z});
  };
  // The planner's spatial cluster is the source of truth for a four-tile home group.
  // Fall back to rendered merges for older saves that predate cluster metadata.
@@ -60,6 +89,16 @@ function houseUpgradeGroups(v){
 }
 function upgradeFoodAvailable(v){return Math.max(0,Number(v.food)-VillageSimulation.reserve(v))}
 function groupKey(group){return group.buildingIds.slice().sort().join('|')}
+function houseUpgradePlan(v,group,asset){
+ const draft=JSON.parse(JSON.stringify(v)),ids=new Set(group.buildingIds.map(String)),members=draft.buildings.filter(item=>ids.has(String(item.id)));
+ if(members.length!==group.buildingIds.length)return null;
+ const upgradeGroupId=`house-upgrade:${groupKey(group)}`;
+ members.forEach(item=>{item.upgradeLevel=2;item.upgradeAsset=asset.key;item.upgradeGroupId=upgradeGroupId});
+ const reorganized=VillageLayout.reorganize(draft,(x,z,w,d,street)=>parcelValid(draft,x,z,w,d,street),true);
+ if(!reorganized)return null;
+ const cluster=draft.layout?.clusters?.find(item=>item.upgradeGroupId===upgradeGroupId&&item.w===asset.w&&item.d===asset.d&&item.buildingIds.length===ids.size&&item.buildingIds.every(id=>ids.has(String(id))));
+ return cluster?draft:null;
+}
 function currentUpgradeTarget(){
  if(!pendingHouseUpgrade)return null;
  const v=state.villages.find(item=>item.id===pendingHouseUpgrade.villageId);
@@ -68,38 +107,54 @@ function currentUpgradeTarget(){
  return group?{v,group}:null;
 }
 function closeUpgradeDialog(){pendingHouseUpgrade=null;const dialog=document.querySelector('#upgradeDialog');if(dialog)dialog.hidden=true}
-function openUpgradeDialog(v,group){pendingHouseUpgrade={villageId:v.id,groupKey:groupKey(group)};renderUpgradeDialog()}
+function openUpgradeDialog(v,group){pendingHouseUpgrade={villageId:v.id,groupKey:groupKey(group),assetKey:group.stage===1?'house:2:3':null};renderUpgradeDialog()}
 function renderUpgradeDialog(){
  const dialog=document.querySelector('#upgradeDialog');if(!dialog)return;
  if(!pendingHouseUpgrade){dialog.hidden=true;return}
  const target=currentUpgradeTarget();
  if(!target){closeUpgradeDialog();msg('Kelompok rumah sudah berubah. Pilih tombol upgrade yang masih terlihat.');return}
- const {v}=target,food=upgradeFoodAvailable(v),wood=Number(v.wood)||0,canAfford=food+1e-9>=HOUSE_UPGRADE_COST.food&&wood+1e-9>=HOUSE_UPGRADE_COST.wood;
+ const {v,group}=target,food=upgradeFoodAvailable(v),wood=Number(v.wood)||0,canAfford=food+1e-9>=HOUSE_UPGRADE_COST.food&&wood+1e-9>=HOUSE_UPGRADE_COST.wood,isSecondStage=group.stage===1;
+ const selected=HOUSE_UPGRADE_OPTIONS.find(item=>item.key===pendingHouseUpgrade.assetKey&&item.key!=='house:2:2');
+ const planCacheKey=isSecondStage?JSON.stringify([groupKey(group),v.layout?.generation,(v.buildings||[]).map(item=>[item.id,item.x,item.z,item.w,item.d,item.rotation,item.upgradeLevel,item.upgradeAsset,item.upgradeGroupId])]):'';
+ if(isSecondStage&&pendingHouseUpgrade.planCacheKey!==planCacheKey){pendingHouseUpgrade.planCacheKey=planCacheKey;pendingHouseUpgrade.planCache=new Map(HOUSE_UPGRADE_OPTIONS.filter(item=>item.key!=='house:2:2').map(item=>[item.key,houseUpgradePlan(v,group,item)]))}
+ const optionPlans=isSecondStage?pendingHouseUpgrade.planCache:new Map();
+ const options=isSecondStage?HOUSE_UPGRADE_OPTIONS.filter(item=>item.key!=='house:2:2').map(item=>{
+  const hasPlan=Boolean(optionPlans.get(item.key)),selectedClass=selected?.key===item.key?' selected':'',disabled=!canAfford||!hasPlan;
+  const reason=!hasPlan?'Layout belum menemukan ruang aman':!canAfford?'Stok belum cukup':selected?.key===item.key?'Layout desa siap ditata ulang':'Pilih ukuran ini';
+  return `<button type="button" class="upgrade-option${selectedClass}" data-house-option="${item.key}" ${disabled?'disabled':''} aria-pressed="${selected?.key===item.key}"><strong>${item.label}</strong><span>${item.w}×${item.d} tile</span><small>🌾 10 pangan · 🪵 5 kayu</small><em>${reason}</em></button>`;
+ }).join(''):'';
+ const selectedPlan=selected?optionPlans.get(selected.key):null,canConfirm=canAfford&&(!isSecondStage||(selected&&selectedPlan));
  dialog.hidden=false;
- dialog.innerHTML=`<div class="upgrade-backdrop" data-close-upgrade></div><section class="upgrade-card" role="dialog" aria-modal="true" aria-labelledby="upgradeTitle"><button class="upgrade-close" type="button" aria-label="Tutup">×</button><span class="upgrade-kicker">KEMAKMURAN KELUARGA</span><h2 id="upgradeTitle">Rumah keluarga mapan</h2><p>Empat rumah 1×1 dalam kelompok 2×2 akan menyatu menjadi kompleks keluarga mapan. Setelah upgrade, kelompok memakai aset Rumah rakyat 4×4 yang sudah tersedia. Kapasitas dan ekonomi tetap.</p><div class="upgrade-cost"><span>🌾 Biaya <b>10 pangan</b></span><span>🪵 Biaya <b>5 kayu</b></span></div><p class="upgrade-stock">Stok dapat dipakai: ${food.toFixed(1)} pangan · ${wood.toFixed(1)} kayu<br>Cadangan pangan desa tetap dijaga.</p>${canAfford?'':'<p class="upgrade-unavailable">Surplus pangan atau stok kayu belum cukup.</p>'}<div class="upgrade-actions"><button type="button" class="upgrade-cancel">Batal</button><button type="button" class="upgrade-confirm" ${canAfford?'':'disabled'}>Upgrade rumah</button></div></section>`;
+ dialog.innerHTML=`<div class="upgrade-backdrop" data-close-upgrade></div><section class="upgrade-card" role="dialog" aria-modal="true" aria-labelledby="upgradeTitle"><button class="upgrade-close" type="button" aria-label="Tutup">×</button><span class="upgrade-kicker">KEMAKMURAN KELUARGA</span><h2 id="upgradeTitle">${isSecondStage?'Pilih ukuran rumah baru':'Rumah keluarga mapan'}</h2><p>${isSecondStage?'Pilih aset rumah yang akan menggantikan tampilan kelompok 2×2. Desa akan ditata ulang agar bangunan dan gang tidak tertimpa; jumlah tile ekonomi tetap.':'Empat rumah 1×1 dalam kelompok 2×2 akan menyatu menjadi aset Rumah rakyat 2×2. Kapasitas dan ekonomi tetap.'}</p>${isSecondStage?`<div class="upgrade-options">${options}</div>`:`<div class="upgrade-cost"><span>🌾 Biaya <b>10 pangan</b></span><span>🪵 Biaya <b>5 kayu</b></span></div>`}<p class="upgrade-stock">Stok dapat dipakai: ${food.toFixed(1)} pangan · ${wood.toFixed(1)} kayu<br>Cadangan pangan desa tetap dijaga.</p>${canAfford?'':'<p class="upgrade-unavailable">Surplus pangan atau stok kayu belum cukup.</p>'}${isSecondStage&&selected&&!selectedPlan?'<p class="upgrade-unavailable">Generator belum menemukan susunan yang aman untuk ukuran ini. Biaya belum dikenakan.</p>':''}<div class="upgrade-actions"><button type="button" class="upgrade-cancel">Batal</button><button type="button" class="upgrade-confirm" ${canConfirm?'':'disabled'}>${isSecondStage?'Upgrade ke '+selected?.w+'×'+selected?.d:'Upgrade ke 2×2'}</button></div></section>`;
  dialog.querySelector('[data-close-upgrade]').onclick=closeUpgradeDialog;
  dialog.querySelector('.upgrade-close').onclick=closeUpgradeDialog;
  dialog.querySelector('.upgrade-cancel').onclick=closeUpgradeDialog;
+ dialog.querySelectorAll('[data-house-option]').forEach(button=>button.onclick=()=>{pendingHouseUpgrade.assetKey=button.dataset.houseOption;renderUpgradeDialog()});
  dialog.querySelector('.upgrade-confirm').onclick=confirmHouseUpgrade;
 }
 function confirmHouseUpgrade(){
  const target=currentUpgradeTarget();
  if(!target){closeUpgradeDialog();return}
- const {v,group}=target,food=upgradeFoodAvailable(v),wood=Number(v.wood)||0;
- if(food+1e-9<HOUSE_UPGRADE_COST.food||wood+1e-9<HOUSE_UPGRADE_COST.wood){renderUpgradeDialog();return}
+ const {v,group}=target,food=upgradeFoodAvailable(v),wood=Number(v.wood)||0,isSecondStage=group.stage===1;
+ const asset=isSecondStage?HOUSE_UPGRADE_OPTIONS.find(item=>item.key===pendingHouseUpgrade.assetKey&&item.key!=='house:2:2'):HOUSE_UPGRADE_OPTIONS.find(item=>item.key==='house:2:2');
+ if(food+1e-9<HOUSE_UPGRADE_COST.food||wood+1e-9<HOUSE_UPGRADE_COST.wood||!asset){renderUpgradeDialog();return}
  const members=group.buildingIds.map(id=>v.buildings.find(item=>String(item.id)===id));
  if(members.some(item=>!item)){closeUpgradeDialog();return}
+ const plannedVillage=isSecondStage?houseUpgradePlan(v,group,asset):null;
+ if(isSecondStage&&!plannedVillage){renderUpgradeDialog();msg('Layout aman belum ditemukan untuk ukuran ini. Tidak ada resource yang dipotong.');return}
+ if(isSecondStage){v.buildings=plannedVillage.buildings;v.layout=plannedVillage.layout}
  v.food=Math.max(VillageSimulation.reserve(v),v.food-HOUSE_UPGRADE_COST.food);
  v.wood=Math.max(0,v.wood-HOUSE_UPGRADE_COST.wood);
- members.forEach(item=>{item.upgradeLevel=1});
- save();closeUpgradeDialog();generate();update();msg(`${v.name}: rumah keluarga ditingkatkan. Stok cadangan tetap terlindungi.`);
+ const upgradeGroupId=`house-upgrade:${groupKey(group)}`;
+ members.forEach(item=>{item.upgradeLevel=group.stage+1;item.upgradeAsset=asset.key;item.upgradeGroupId=upgradeGroupId});
+ save();closeUpgradeDialog();generate();update();msg(`${v.name}: rumah keluarga ditingkatkan ke ${asset.w}×${asset.d}; susunan bangunan dan gang desa ditata ulang. Biaya 10 pangan dan 5 kayu; stok cadangan tetap terlindungi.`);
 }
 function syncUpgradeMarkers(){
  const container=document.querySelector('#upgradeMarkers');if(!container)return;
  container.replaceChildren();
  for(const v of state.villages){
   for(const group of houseUpgradeGroups(v)){
-   const marker=document.createElement('button');marker.type='button';marker.className='upgrade-marker';marker.textContent='UPGRADE';marker.title='Upgrade kelompok 4 rumah · 10 pangan + 5 kayu';marker.setAttribute('aria-label',`Upgrade rumah keluarga ${v.name}: 10 pangan dan 5 kayu`);marker.dataset.villageId=v.id;marker.dataset.groupKey=groupKey(group);marker.dataset.x=group.x;marker.dataset.z=group.z;
+   const marker=document.createElement('button');marker.type='button';marker.className='upgrade-marker';marker.textContent=group.stage===1?'PILIH UKURAN':'UPGRADE';marker.title=group.stage===1?'Pilih ukuran rumah · 10 pangan + 5 kayu':'Upgrade kelompok rumah · 10 pangan + 5 kayu';marker.setAttribute('aria-label',`Upgrade rumah keluarga ${v.name}: 10 pangan dan 5 kayu`);marker.dataset.villageId=v.id;marker.dataset.groupKey=groupKey(group);marker.dataset.x=group.x;marker.dataset.z=group.z;
    marker.classList.toggle('needs-stock',upgradeFoodAvailable(v)+1e-9<HOUSE_UPGRADE_COST.food||(Number(v.wood)||0)+1e-9<HOUSE_UPGRADE_COST.wood);
    marker.onclick=event=>{event.preventDefault();event.stopPropagation();openUpgradeDialog(v,group)};
    container.appendChild(marker);

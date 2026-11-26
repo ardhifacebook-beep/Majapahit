@@ -2,7 +2,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 10;
+  const VERSION = 11;
   const REORGANIZE_EVERY = 5;
   const MERGE_SIZES = {
     house: [[4, 6], [4, 4], [2, 3], [2, 2]],
@@ -198,8 +198,27 @@
   function buildingClusters(buildings, villageId) {
     const clusters = [];
     for (const kind of ['house', 'rice', 'wood']) {
-      const members = buildings.filter(b => b.kind === kind)
+      let members = buildings.filter(b => b.kind === kind)
         .sort((a, b) => b.w * b.d - a.w * a.d || String(a.id).localeCompare(String(b.id)));
+      if (kind === 'house') {
+        const grouped = new Map();
+        for (const building of members) {
+          if (Number(building.upgradeLevel) < 2 || !building.upgradeGroupId || !building.upgradeAsset) continue;
+          const group = grouped.get(building.upgradeGroupId) || [];
+          group.push(building);
+          grouped.set(building.upgradeGroupId, group);
+        }
+        const reserved = new Set();
+        for (const [upgradeGroupId, group] of [...grouped].sort(([a], [b]) => a.localeCompare(b))) {
+          const [assetKind, rawW, rawD] = String(group[0]?.upgradeAsset || '').split(':');
+          const visualW = Number(rawW), visualD = Number(rawD);
+          const tiles = group.reduce((sum, item) => sum + item.w * item.d, 0);
+          if (assetKind !== 'house' || !Number.isInteger(visualW) || !Number.isInteger(visualD) || group.length !== 4 || tiles !== 4 || group.some(item => item.w !== 1 || item.d !== 1 || Number(item.upgradeLevel) !== 2 || item.upgradeAsset !== group[0].upgradeAsset)) continue;
+          clusters.push({ id: `${villageId}-upgrade-${upgradeGroupId}`, kind: 'house', tiles, buildings: group, upgradeGroupId, visualW, visualD });
+          group.forEach(item => reserved.add(item));
+        }
+        members = members.filter(item => !reserved.has(item));
+      }
       let cluster = null;
       for (const building of members) {
         const area = building.w * building.d;
@@ -216,6 +235,16 @@
   }
 
   function packCluster(cluster) {
+    if (cluster.visualW && cluster.visualD) {
+      const inner = { ...cluster, visualW: null, visualD: null };
+      packCluster(inner);
+      if (inner.w > cluster.visualW || inner.d > cluster.visualD) return cluster;
+      const offsetX = Math.floor((cluster.visualW - inner.w) / 2), offsetZ = Math.floor((cluster.visualD - inner.d) / 2);
+      cluster.w = cluster.visualW; cluster.d = cluster.visualD;
+      cluster.parts = inner.parts.map(part => ({ ...part, x: part.x + offsetX, z: part.z + offsetZ }));
+      cluster.grid = true;
+      return cluster;
+    }
     if (cluster.tiles > 4) {
       cluster.w = Math.max(...cluster.buildings.map(b => b.w));
       cluster.d = Math.max(...cluster.buildings.map(b => b.d));
@@ -292,8 +321,11 @@
         Math.min(...[...roadCells].map(cell => { const [x, z] = cell.split(',').map(Number); return octile(b.cell[0], b.cell[1], [x, z]); }))
       );
       for (const access of accessOptions.slice(0, 2)) {
+        // Every previously placed parcel, including a visually enlarged house,
+        // is a hard keepout for new alleys. Economic tiles alone are too small
+        // to protect the rendered footprint of an upgraded asset.
         const path = pathToRoad(access.cell, candidate, buildings, roadCells, valid, seed,
-          Math.max(18, Math.ceil(target.radius + 8)));
+          Math.max(18, Math.ceil(target.radius + 8)), layout.blocks);
         if (path && (!best || path.length < best.path.length)) best = { ...access, path };
       }
       if (best) return { ...candidate, access: best };
@@ -344,7 +376,7 @@
     const roadSeed = [[cx, cz], [cx, cz + 1]];
     draft.layout.streets.push({ kind: 'main', key: roadSeed.map(([x, z]) => key(x, z)).join(';'), path: roadSeed });
     const totalArea = v.buildings.reduce((sum, b) => sum + b.w * b.d, 0);
-    const clusters = buildingClusters(v.buildings, v.id);
+    const clusters = buildingClusters(v.buildings, v.id).sort((a, b) => Number(Boolean(b.upgradeGroupId)) - Number(Boolean(a.upgradeGroupId)) || a.kind.localeCompare(b.kind) || String(a.id).localeCompare(String(b.id)));
     const phase = (hashString(`${v.id}:city-ring`) / 4294967295) * Math.PI * 2;
     const homeClusters = clusters.filter(cluster => cluster.kind === 'house');
     const homeRingCount = Math.max(1, Math.ceil(homeClusters.length / 8));
@@ -379,7 +411,7 @@
         kind: 'lane', key: positioned.access.path.map(([x, z]) => key(x, z)).join(';'), path: positioned.access.path
       });
       cluster.center = [cluster.x + cluster.w / 2, cluster.z + cluster.d / 2];
-      draft.layout.clusters.push({ id: cluster.id, kind: cluster.kind, tiles: cluster.tiles, buildingIds: cluster.parts.map(p => p.building.id), x: cluster.x, z: cluster.z, w: cluster.w, d: cluster.d, center: cluster.center, radius, angle, ring: ringLayer, grid: cluster.grid });
+      draft.layout.clusters.push({ id: cluster.id, kind: cluster.kind, tiles: cluster.tiles, buildingIds: cluster.parts.map(p => p.building.id), upgradeGroupId: cluster.upgradeGroupId || null, x: cluster.x, z: cluster.z, w: cluster.w, d: cluster.d, center: cluster.center, radius, angle, ring: ringLayer, grid: cluster.grid });
       placedClusters.push(cluster);
     }
 
@@ -428,9 +460,11 @@
   function orientedGroups(v) {
     return visualGroups(v.buildings).map(item => {
       const members = item.buildingIds.map(id => v.buildings.find(b => String(b.id) === id)).filter(Boolean);
-      const wealthLevel = members.some(b => Number(b.upgradeLevel) > 0) ? 1 : 0;
+      const wealthLevel = members.reduce((level, b) => Math.max(level, Number(b.upgradeLevel) || 0), 0);
+      const assetKeys = [...new Set(members.map(b => b.upgradeAsset).filter(Boolean))];
+      const [assetW, assetD] = (assetKeys.length === 1 ? assetKeys[0] : 'house:2:2').split(':').slice(1).map(Number);
       // Paid groups of four 1×1 houses keep their 2×2 visual footprint.
-      return { ...item, rotation: members[0]?.rotation || 0, wealthLevel };
+      return { ...item, rotation: members[0]?.rotation || 0, wealthLevel, assetW: wealthLevel ? assetW : item.w, assetD: wealthLevel ? assetD : item.d };
     });
   }
 
@@ -446,7 +480,8 @@
             const members = new Set(); let complete = true;
             for (let tx = x; tx < x + w && complete; tx++) for (let tz = z; tz < z + d; tz++) {
               const member = occupancy.get(key(tx, tz));
-              if (!member || member.kind !== building.kind || (member.rotation !== building.rotation && !(building.kind === 'house' && Number(member.upgradeLevel) > 0 && Number(building.upgradeLevel) > 0)) || !remaining.has(member)) { complete = false; break; }
+              const upgradedHouseMismatch = building.kind === 'house' && Number(member?.upgradeLevel) > 0 && Number(building.upgradeLevel) > 0 && (!member.upgradeGroupId || member.upgradeGroupId !== building.upgradeGroupId);
+              if (!member || member.kind !== building.kind || upgradedHouseMismatch || (member.rotation !== building.rotation && !(building.kind === 'house' && Number(member.upgradeLevel) > 0 && Number(building.upgradeLevel) > 0)) || !remaining.has(member)) { complete = false; break; }
               members.add(member);
             }
             if (!complete || members.size < 2) continue;
