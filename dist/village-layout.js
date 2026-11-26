@@ -427,8 +427,8 @@
 
   function orientedGroups(v) {
     return visualGroups(v.buildings).map(item => {
-      const members = v.buildings.filter(b => b.kind === item.kind && b.x >= item.x - item.w / 2 && b.x < item.x + item.w / 2 && b.z >= item.z - item.d / 2 && b.z < item.z + item.d / 2);
-      return { ...item, rotation: members[0]?.rotation || 0 };
+      const members = item.buildingIds.map(id => v.buildings.find(b => String(b.id) === id)).filter(Boolean);
+      return { ...item, rotation: members[0]?.rotation || 0, wealthLevel: members.some(b => Number(b.upgradeLevel) > 0) ? 1 : 0 };
     });
   }
 
@@ -455,13 +455,13 @@
             }
             if (!complete || area !== w * d) continue;
             for (const member of members) remaining.delete(member);
-            output.push({ kind: building.kind, x: x + w / 2, z: z + d / 2, w, d, merged: true });
+            output.push({ kind: building.kind, x: x + w / 2, z: z + d / 2, w, d, merged: true, buildingIds: [...members].map(member => String(member.id)).sort() });
             merged = true;
           }
         }
         if (merged) break;
       }
-      if (!merged && remaining.delete(building)) output.push({ kind: building.kind, x: building.x + building.w / 2, z: building.z + building.d / 2, w: building.w, d: building.d });
+      if (!merged && remaining.delete(building)) output.push({ kind: building.kind, x: building.x + building.w / 2, z: building.z + building.d / 2, w: building.w, d: building.d, merged: false, buildingIds: [String(building.id)] });
     }
     return output;
   }
