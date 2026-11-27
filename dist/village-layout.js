@@ -2,7 +2,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 11;
+  const VERSION = 12;
   const REORGANIZE_EVERY = 5;
   const MERGE_SIZES = {
     house: [[4, 6], [4, 4], [2, 3], [2, 2]],
@@ -292,7 +292,9 @@
   function allocateCluster(v, cluster, valid, target) {
     const layout = v.layout, cx = Math.floor(v.x), cz = Math.floor(v.z), buildings = v.buildings;
     const seed = hashString(`${v.id}:${layout.generation || 0}:${cluster.id}`);
-    const search = Math.min(25, target.radius + 4 + Math.max(cluster.w, cluster.d) * .25);
+    // Larger upgrade parcels need a wider search band so the planner can move
+    // them to a clear outer ring instead of rejecting them at the old house ring.
+    const search = Math.min(32, target.radius + 7 + Math.max(cluster.w, cluster.d) * .5);
     const candidates = [];
     for (let x = Math.ceil(cx - search); x <= Math.floor(cx + search - cluster.w + 1); x++) {
       for (let z = Math.ceil(cz - search); z <= Math.floor(cz + search - cluster.d + 1); z++) {
@@ -314,7 +316,7 @@
     }
     candidates.sort((a, b) => a.score - b.score);
     const roadCells = new Set(layout.streets.flatMap(road => road.path.map(([x, z]) => key(x, z))));
-    for (const candidate of candidates.slice(0, 48)) {
+    for (const candidate of candidates.slice(0, cluster.upgradeGroupId ? 144 : 96)) {
       let best = null;
       const accessOptions = accessTargets(candidate).sort((a, b) =>
         Math.min(...[...roadCells].map(cell => { const [x, z] = cell.split(',').map(Number); return octile(a.cell[0], a.cell[1], [x, z]); })) -
@@ -365,7 +367,7 @@
     layout.streets.push({ kind: 'ring', key: best.map(([x, z]) => key(x, z)).join(';'), path: best });
   }
 
-  function plan(v, valid, generation) {
+  function plan(v, valid, generation, expansion = 0) {
     const cx = Math.floor(v.x), cz = Math.floor(v.z);
     const draft = {
       ...v,
@@ -390,9 +392,10 @@
       const sector = angularSlot(localIndex);
       const typeOffset = cluster.kind === 'house' ? -.08 : .08;
       const angle = phase + sector * .78 + typeOffset + (noise(index, cluster.tiles, hashString(v.id + cluster.kind)) - .5) * .18;
-      const radius = cluster.kind === 'house'
-        ? 3.15 + ringLayer * 3.35
-        : 5.65 + (homeRingCount - 1) * 3.35 + ringLayer * 3.45;
+      const assetRing = cluster.upgradeGroupId ? Math.max(0, Math.max(cluster.w, cluster.d) - 2) * .8 : 0;
+      const radius = (cluster.kind === 'house'
+        ? 3.15 + ringLayer * 3.35 + assetRing
+        : 5.65 + (homeRingCount - 1) * 3.35 + ringLayer * 3.45) + expansion;
       const anchor = [v.x + Math.cos(angle) * radius, v.z + Math.sin(angle) * radius];
       const positioned = allocateCluster(draft, cluster, valid, { radius, angle, anchor });
       if (!positioned) return null;
@@ -431,7 +434,14 @@
     const previous = v.layout || {};
     if (!force && v.layout?.version === VERSION && !isDue(v)) return false;
     const generation = (Number(previous.generation) || 0) + (previous.version === VERSION ? 1 : 0);
-    const draft = plan(v, valid, generation);
+    let draft = null;
+    // If the compact arrangement cannot fit every parcel or connect its alleys,
+    // retry in successively wider rings. This keeps the first attempt compact
+    // while allowing late upgrades to expand the village naturally.
+    for (const expansion of [0, 4, 8, 12]) {
+      draft = plan(v, valid, generation, expansion);
+      if (draft) break;
+    }
     if (!draft) return false;
     v.buildings = draft.buildings;
     v.layout = draft.layout;
